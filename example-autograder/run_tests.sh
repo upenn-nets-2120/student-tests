@@ -3,9 +3,6 @@
 # this is written in a separate file for modularity, since maybe other autograders that use this
 # test case grader will have different setup steps and parts of the autograder
 
-# temporary testing
-curl -X GET http://localhost:3000
-
 # Run student tests against sample solution
 # need to add student ID as query parameter before sending here (and in later requests)
 # curl -X POST http://localhost:3000 -d @tests.json -H "Content-Type: application/json" > results.json

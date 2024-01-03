@@ -41,7 +41,7 @@ MongoClient.connect(url, { useNewUrlParser: true, useUnifiedTopology: true }, (e
 });
 
 app.get('/', (req, res) => {
-  res.send('TEST API');
+  res.status(200).send('ok');
 });
 
 app.post('/submit-tests', express.text({ type: 'application/json' }), async (req, res) => {
@@ -62,6 +62,7 @@ app.post('/submit-tests', express.text({ type: 'application/json' }), async (req
   for (const testCase of testCases) {
     testCase.author = author;
 
+    testCase.public ??= true;
     testCase.passedDefault ??= true;
     testCase.timesRan ??= 0;
     testCase.timesRanSuccessfully ??= 0;

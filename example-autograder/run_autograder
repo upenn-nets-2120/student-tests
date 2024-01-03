@@ -1,17 +1,60 @@
 #!/bin/bash
 
+cd /autograder/submission
+
+# Check if tests.json file exists
+if [ ! -f tests.json ]; then
+    # give different message if tests aren't needed to be submitted
+    echo '{ "error": "tests.json file not found. Please submit a valid tests.json file." }' > /autograder/results/results.json
+    exit 1
+fi
+
 cd /autograder/source/sample-server
 
 node index.js &
 
 sleep 5
 
-cd /autograder/submission
+# Run student tests against sample solution
+while read -r test; do
+    name=$(echo "$test" | jq -r '.name')
+    command=$(echo "$test" | jq -r '.test.command')
+    expected_status=$(echo "$test" | jq '.test.response.status')
+    expected_body=$(echo "$test" | jq '.test.response.body')
 
-# temporary testing
-curl -X GET http://localhost:3000
+    # Run the test command
+    response=$(eval "$command" -w "\n%{http_code}" -s)
+    response_body=$(echo "$response" | head -n 1)
+    response_status=$(echo "$response" | tail -n 1)
 
-bash /autograder/source/run_tests.sh
+    # Compare actual and expected response
+    if [ "$response_status" -ne "$expected_status" ]; then
+        echo "{ \"error\": \"Test '$name' failed. Expected status $expected_status, got $response_status.\" }" > /autograder/results/results.json
+        exit 1
+    fi
+
+    if [ "$(echo "$response_body" | jq .)" != "$(echo "$expected_body" | jq .)" ]; then
+        echo "{ \"error\": \"Test '$name' failed. Expected body $expected_body, got $response_body.\" }" > /autograder/results/results.json
+        exit 1
+    fi
+done < <(jq -c '.[]' tests.json)
+
+# Check database health and see if running
+response=$(curl -s -o /dev/null -w "%{http_code}" "http://${SERVER_IP}:${SERVER_PORT}/")
+if [ "$response" -ne 200 ]; then
+    # should instead return local results with error message
+    echo "Server is not running or not healthy. Contact the assignment administrators." > /autograder/results/results.json
+    exit 1
+fi
+
+# Parse the student ID from submission_metadata.json
+STUDENT_ID=$(jq '.users[0].id' /autograder/submission_metadata.json)
+
+# Submit student tests to database if successful
+curl -X POST "http://${SERVER_IP}:${SERVER_PORT}/submit-tests?student_id=${STUDENT_ID}" -d @tests.json -H "Content-Type: application/json" > test-submission.json
+
+# Run returned tests against student solution
+# ...
 
 # Upload test results to database, and return for gradescope
 
