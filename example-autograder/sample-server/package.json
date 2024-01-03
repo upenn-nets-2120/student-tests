@@ -1,0 +1,15 @@
+{
+  "name": "NETS2120_SAMPLE_SOLUTION",
+  "version": "1.0.0",
+  "description": "This is the homework's sample solution server",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "express": "^4.17.1"
+  },
+  "author": "",
+  "license": "ISC"
+}
