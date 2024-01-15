@@ -17,7 +17,7 @@
     "description": "optional desc",
     "public": true,
     "test": {
-      "command": "curl -X GET http://localhost:3000/some-route",
+      "command": "curl -X GET http://localhost:3000/",
       "response": {
         "status": 200,
         "body": {

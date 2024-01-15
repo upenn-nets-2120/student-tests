@@ -111,15 +111,27 @@ def main():
 
   sample_results = run_tests(tests)
   stop_server(sample_server)
+  feedback = {
+    "tests": [
+      {
+        "name": result["name"],
+        "status": "failed" if not result["result"]["success"] else "passed",
+        "output": result["result"]["reason"],
+        "visibility": "visible"
+      } for result in sample_results["results"]
+    ]
+  }
   if sample_results["total"] != sample_results["passed"]:
     # TODO: give different feedback message with description of failed tests
-    write_output({"error": "Test cases did not pass sample implementation. If you believe this to be an error, please contact the administrator."})
+    write_output({"output": "Test cases did not pass sample implementation. If you believe this to be an error, please contact the administrator."})
     return
+  else:
+    write_output({"output": "Test cases did not pass sample implementation.", "tests": feedback["tests"]})
   
 
   if not check_database_health():
     # TODO: give different feedback message with description of passed tests (from above), as well as error
-    write_output({"error": "Server is not running or not healthy. Contact the assignment administrators."})
+    write_output({"output": "Server is not running or not healthy. Contact the assignment administrators."})
     return
 
   student_id = get_student_id()
@@ -128,7 +140,7 @@ def main():
   response = upload_tests(student_id, tests)
   if response.status_code != 200:
     # TODO: give different feedback message with description of passed tests (from above), as well as error
-    write_output({"error": "Error uploading tests to the database."})
+    write_output({"output": "Error uploading tests to the database."})
     return
   all_tests = response.json()
 
@@ -138,7 +150,7 @@ def main():
   stop_server(student_server)
   if all_results["total"] != all_results["passed"]:
     # TODO: give detailed feedback message with description of failed/passed tests
-    write_output({"error": "All test cases did not pass."})
+    write_output({"output": "All test cases did not pass."})
     return
   
   # TODO: Upload results to the database
@@ -151,3 +163,38 @@ def main():
 
 if __name__ == "__main__":
   main()
+
+
+# { "score": 44.0, // optional, but required if not on each test case below. Overrides total of tests if specified.
+#   "execution_time": 136, // optional, seconds
+#   "output": "Text relevant to the entire submission", // optional
+#   "output_format": "simple_format", // Optional output format settings, see "Output String Formatting" below
+#   "test_output_format": "text", // Optional default output format for test case outputs, see "Output String Formatting" below
+#   "test_name_format": "text", // Optional default output format for test case names, see "Output String Formatting" below
+#   "visibility": "after_due_date", // Optional visibility setting
+#   "stdout_visibility": "visible", // Optional stdout visibility setting
+#   "extra_data": {}, // Optional extra data to be stored
+#   "tests": // Optional, but required if no top-level score
+#     [
+#         {
+#             "score": 2.0, // optional, but required if not on top level submission
+#             "max_score": 2.0, // optional
+#             "status": "passed", // optional, see "Test case status" below
+#             "name": "Your name here", // optional
+#             "name_format": "text", // optional formatting for the test case name, see "Output String Formatting" below
+#             "number": "1.1", // optional (will just be numbered in order of array if no number given)
+#             "output": "Giant multiline string that will be placed in a <pre> tag and collapsed by default", // optional
+#             "output_format": "text", // optional formatting for the test case output, see "Output String Formatting" below
+#             "tags": ["tag1", "tag2", "tag3"], // optional
+#             "visibility": "visible", // Optional visibility setting
+#             "extra_data": {} // Optional extra data to be stored
+#         },
+#         // and more test cases...
+#     ],
+#   "leaderboard": // Optional, will set up leaderboards for these values
+#     [
+#       {"name": "Accuracy", "value": .926},
+#       {"name": "Time", "value": 15.1, "order": "asc"},
+#       {"name": "Stars", "value": "*****"}
+#     ]
+# }
