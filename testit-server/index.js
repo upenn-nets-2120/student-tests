@@ -27,6 +27,7 @@ MongoClient.connect(url, { useNewUrlParser: true, useUnifiedTopology: true }, (e
   db = client.db(dbName);
   testsCollection = db.collection('tests');
 
+  // Trying this each time should be fine, MongoDB handles it gracefully
   testsCollection.createIndex({ name: 1 }, { unique: true }, (err, result) => {
     if (err) {
       console.log('Error creating index:', err);
@@ -88,3 +89,5 @@ app.post('/submit-tests', express.text({ type: 'application/json' }), async (req
     res.status(500).send(result);
   }
 });
+
+// TODO: Add another route for uploading results of running tests
