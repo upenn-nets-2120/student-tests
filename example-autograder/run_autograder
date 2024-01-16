@@ -1,5 +1,11 @@
 #!/bin/bash
 
+cd /autograder/source
+
+if [ -f .env ]; then
+    export $(cat .env | xargs)
+fi
+
 cd /autograder/submission
 
 # Check if tests.json file exists

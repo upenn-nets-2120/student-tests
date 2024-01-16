@@ -60,15 +60,16 @@ def run_tests(tests):
 
 def upload_results(student_id, results):
   url = f"http://{SERVER_IP}:{SERVER_PORT}/upload-results?student_id={student_id}"
-  headers = {'Content-Type': 'application/json'}
+  headers = {'Content-Type': 'application/json', 'Authorization': AUTH_TOKEN}
   response = requests.post(url, json=results, headers=headers)
   return response
 
 
 def check_database_health():
   url = f"http://{SERVER_IP}:{SERVER_PORT}/"
+  headers = {'Authorization': AUTH_TOKEN}
   try:
-    response = requests.get(url)
+    response = requests.get(url, headers=headers)
     return response.status_code == 200
   except requests.RequestException:
     return False
@@ -82,7 +83,7 @@ def get_student_id():
 
 def upload_tests(student_id, tests):
   url = f"http://{SERVER_IP}:{SERVER_PORT}/submit-tests?student_id={student_id}"
-  headers = {'Content-Type': 'application/json'}
+  headers = {'Content-Type': 'application/json', 'Authorization': AUTH_TOKEN}
   response = requests.post(url, json=tests, headers=headers)
   return response
 
