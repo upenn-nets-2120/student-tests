@@ -143,7 +143,12 @@ def main():
     # TODO: give different feedback message with description of passed tests (from above), as well as error
     write_output({"output": "Error uploading tests to the database."})
     return
-  all_tests = response.json()
+  json_response = response.json()
+  if not json_response['success']:
+    # TODO: give different feedback message with description of passed tests (from above), as well as error
+    write_output({"output": "Failed to upload all tests"})
+    return
+  all_tests = response.json()['tests']
 
   student_server = start_server("/autograder/submission")
 
