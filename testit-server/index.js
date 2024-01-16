@@ -50,10 +50,11 @@ app.post('/submit-tests', express.text({ type: 'application/json' }), async (req
   try {
     testCases = JSON.parse(req.body);
   } catch (err) {
+    console.log('Error parsing JSON:', err);
     return res.status(400).send('Invalid JSON format');
   }
 
-  const author = req.query.author;
+  const author = req.query.student_id;
   if (!author) {
     return res.status(400).send('Error: Author is required as a query parameter.');
   }
