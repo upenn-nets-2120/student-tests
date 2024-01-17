@@ -105,6 +105,8 @@ def stop_server(process):
 
 
 def write_output(data):
+  if len(data["tests"]) == 0:
+    data["score"] = 0
   with open('/autograder/results/results.json', 'w') as file:
     json.dump(data, file)
 
