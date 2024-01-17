@@ -78,6 +78,17 @@ app.get('/view-tests', (req, res) => {
   });
 });
 
+app.delete('/delete-tests', authorize, (req, res) => {
+  testsCollection.deleteMany({}, (err, result) => {
+    if (err) {
+      res.status(500).send('Error deleting tests from database');
+      return;
+    }
+
+    res.status(200).send('Deleted all tests from database');
+  });
+});
+
 app.post('/submit-tests', authorize, express.json(), async (req, res) => {
   let testCases = req.body;
 

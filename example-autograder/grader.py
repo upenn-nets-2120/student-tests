@@ -160,7 +160,7 @@ def main():
     for failure in json_response['failedToAdd']:
       output_str += failure['name'] + ": \t" + failure['reason'] + "\n"
     output_str += "\n"
-  else:
+  elif len(successful_tests) > 0:
     output_str += "All tests successfully uploaded to the database!\n"
   all_tests = response.json()['tests']
 
