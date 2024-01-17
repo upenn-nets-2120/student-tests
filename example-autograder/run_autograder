@@ -8,11 +8,4 @@ fi
 
 cd /autograder/submission
 
-# Check if tests.json file exists
-if [ ! -f tests.json ]; then
-    # give different message if tests aren't needed to be submitted
-    echo '{ "error": "tests.json file not found. Please submit a valid tests.json file." }' > /autograder/results/results.json
-    exit 1
-fi
-
 python3 /autograder/source/grader.py

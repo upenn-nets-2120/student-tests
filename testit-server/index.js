@@ -92,10 +92,13 @@ app.post('/submit-tests', authorize, express.json(), async (req, res) => {
 
     testCase.public ??= true;
     testCase.passedDefault ??= true;
-    testCase.timesRan ??= 0;
-    testCase.timesRanSuccessfully ??= 0;
-    testCase.numStudentsRan ??= 0;
-    testCase.numStudentsRanSuccessfully ??= 0;
+    testCase.timesRan = 0;
+    testCase.timesRanSuccessfully = 0;
+    testCase.numStudentsRan = 0;
+    testCase.numStudentsRanSuccessfully = 0;
+    testCase.studentsRan = [];
+    testCase.studentsRanSuccessfully = [];
+    testCase.isDefault = false; // default would be true for instructor-created test cases that show up even if a student hasn't submitted any tests
 
     const existingTestCase = await testsCollection.findOne({ name: testCase.name });
     if (existingTestCase) {
@@ -119,7 +122,9 @@ app.post('/submit-tests', authorize, express.json(), async (req, res) => {
     }
     result.success = true;
 
-    const returnedTests = await testsCollection.find({ $or: [{ public: true }, { author: author }] }).toArray();
+    const authorHasTest = await testsCollection.findOne({ author: author });
+
+    const returnedTests = !authorHasTest ? await testsCollection.find({ isDefault: true }).toArray() : await testsCollection.find({ $or: [{ public: true }, { author: author }, { isDefault: true }] }).toArray();
     result.tests = returnedTests;
 
     res.status(201).send(result);
@@ -130,4 +135,48 @@ app.post('/submit-tests', authorize, express.json(), async (req, res) => {
   }
 });
 
-// TODO: Add another route for uploading results of running tests
+app.post('/submit-results', authorize, express.json(), async (req, res) => {
+  let data = req.body;
+
+  const author = req.query.student_id;
+  if (!author) {
+    return res.status(400).send('Error: Author is required as a query parameter.');
+  }
+  console.log("Recieving results from Student ID " + author);
+
+  const result = { failedToUpdate: [] };
+  for (const testResult of data) {
+    try {
+      // Increment timesRan and timesRanSuccessfully
+      await testsCollection.updateOne(
+        { name: testResult.name },
+        { $inc: { timesRan: 1, timesRanSuccessfully: testResult.passed ? 1 : 0 } }
+      );
+
+      // Update numStudentsRan and numStudentsRanSuccessfully only if this student has not run this test before
+      const updateFields = {};
+      const addToSetFields = { $addToSet: {} };
+
+      const testCase = await testsCollection.findOne({ name: testResult.name });
+      if (testCase && !testCase.studentsRan.includes(author)) {
+        updateFields.numStudentsRan = 1;
+        addToSetFields.$addToSet.studentsRan = author;
+      }
+      if (testResult.passed && testCase && !testCase.studentsRanSuccessfully.includes(author)) {
+        updateFields.numStudentsRanSuccessfully = 1;
+        addToSetFields.$addToSet.studentsRanSuccessfully = author;
+      }
+
+      await testsCollection.updateOne(
+        { name: testResult.name },
+        { $inc: updateFields, ...addToSetFields }
+      );
+    } catch (err) {
+      console.log("Error updating test result for:", testResult.name, err);
+      result.failedToUpdate.push({ "name": testResult.name, "reason": "Error in updating the database." });
+    }
+  }
+
+  result.success = result.failedToUpdate.length === 0;
+  res.status(result.success ? 200 : 500).send(result);
+});

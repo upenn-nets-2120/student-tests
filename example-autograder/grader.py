@@ -50,7 +50,8 @@ def run_tests(tests):
     test_result = run_test(test)
     results["results"].append({
         "name": test["name"],
-        "result": test_result
+        "result": test_result,
+        "test": test
     })
     if test_result["success"]:
       results["passed"] += 1
@@ -58,13 +59,6 @@ def run_tests(tests):
       results["failed"] += 1
       
   return results
-
-
-def upload_results(student_id, results):
-  url = f"{SERVER_URI}/upload-results?student_id={student_id}"
-  headers = {'Content-Type': 'application/json', 'Authorization': AUTH_TOKEN}
-  response = requests.post(url, json=results, headers=headers)
-  return response
 
 
 def check_database_health():
@@ -90,6 +84,13 @@ def upload_tests(student_id, tests):
   return response
 
 
+def upload_results(student_id, results):
+  url = f"{SERVER_URI}/submit-results?student_id={student_id}"
+  headers = {'Content-Type': 'application/json', 'Authorization': AUTH_TOKEN}
+  response = requests.post(url, json=results, headers=headers)
+  return response
+
+
 def start_server(server_path, npm_install=False):
   if npm_install:
     subprocess.run(["npm", "install"], cwd=server_path)
@@ -110,27 +111,37 @@ def write_output(data):
 
 def main():
   # Read tests
-  with open('tests.json', 'r') as file:
-    tests = json.load(file)
+  try:
+    with open('tests.json', 'r') as file:
+        tests = json.load(file)
+  except:
+    tests = []
+  
+  output_str = ""
+  if len(tests) > 0:
+    # Run tests on sample server
+    sample_server = start_server("/autograder/source/sample-server")
+    sample_results = run_tests(tests)
+    stop_server(sample_server)
 
-  # Run tests on sample server
-  sample_server = start_server("/autograder/source/sample-server")
-  sample_results = run_tests(tests)
-  stop_server(sample_server)
+    # Format feedback and ensure they passed sample
+    feedback = [{
+      "name": "SAMPLE SOLUTION RESULT: " + result["name"],
+      "status": "failed" if not result["result"]["success"] else "passed",
+      "score": 0 if not result["result"]["success"] else 0,
+      "output": result["result"]["reason"],
+      "visibility": "visible"
+    } for result in sample_results["results"]]
+    successful_tests = [result["test"] for result in sample_results["results"] if result["result"]["success"]]
 
-  # Format feedback and ensure they passed sample
-  feedback = [{
-    "name": result["name"],
-    "status": "failed" if not result["result"]["success"] else "passed",
-    "score": -1.0 if not result["result"]["success"] else 0,
-    "output": result["result"]["reason"],
-    "visibility": "visible"
-  } for result in sample_results["results"]]
-
-  if sample_results["total"] != sample_results["passed"]:
-    write_output({"output": "Test cases did not pass sample implementation. If you believe any of these to be a mistake, please contact the assignment administrators. Here are the outcomes of running your tests on THE SAMPLE SOLUTION.", "tests": feedback})
-    return
-  output_str = "All uploaded tests passed the sample implementation!\n"
+    if sample_results["total"] != sample_results["passed"]:
+      output_str += "Some test cases did not pass sample implementation. If you believe any of these to be a mistake, please contact the assignment administrators. Only test cases that pass this sample may be uploaded. You can find the outcomes of running your tests on THE SAMPLE SOLUTION below.\n"
+    else:
+      output_str += "All uploaded tests passed the sample implementation!\n"
+  else:
+    output_str += "No tests were uploaded. You must have submitted at least one working test at some point to be able to run other students' tests.\n"
+    feedback = []
+    successful_tests = []
 
   # Ensure database is running
   if not check_database_health():
@@ -139,7 +150,7 @@ def main():
   student_id = get_student_id()
 
   # Upload tests to the database, get response of all tests
-  response = upload_tests(student_id, tests)
+  response = upload_tests(student_id, successful_tests)
   json_response = response.json()
   if response.status_code < 200 or response.status_code >= 300 or not json_response['success']:
     write_output({"output": "Error uploading tests to the database. Please contact the assignment administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
@@ -158,66 +169,28 @@ def main():
   all_results = run_tests(all_tests)
   stop_server(student_server)
   
-  # Format feedback and return results (note that we don't need feedback.extend because upload_tests
-  # should return EVERY test case that student has ever uploaded successfully, so that test case
-  # will just be included and re-ran).
-  feedback = [{
+  # Format feedback and return results
+  feedback += [{
     "name": result["name"],
     "status": "failed" if not result["result"]["success"] else "passed",
-    "score": -1.0 if not result["result"]["success"] else 0,
+    "score": 0 if not result["result"]["success"] else 0,
     "output": result["result"]["reason"],
     "visibility": "visible"
   } for result in all_results["results"]]
 
   if all_results["total"] != all_results["passed"]:
-    output_str += "\nNot all uploaded test cases passed your implementation. Please see the following breakdown.\n"
+    output_str += "\nNot all available test cases passed your implementation. Please see the following breakdown.\n"
+  elif all_results["total"] == 0:
+    output_str += "\nNo available tests to run on your implementation. You must have submitted at least one working test at some point to be able to run other students' tests.\n"
   else:
-    output_str += "\nAll uploaded test cases passed your implementation!\n"
+    output_str += "\nAll available test cases passed your implementation!\n"
+
+  # Upload results to the database
+  upload_response = upload_results(student_id, [{"name": result["name"], "passed": result["result"]["success"]} for result in all_results["results"]])
+  if upload_response.status_code != 200:
+    output_str += "\nError uploading results to the database. Please contact the assignment administrators. You can still see the results of the test cases below, but the updated statistics have not been uploaded.\n"
   
   write_output({"output": output_str, "tests": feedback})
 
-  # TODO: Upload results to the database
-  # upload_response = upload_results(student_id, {"success": "All tests passed"})
-  # if upload_response.status_code != 200:
-  #   results = {"error": "Error uploading results to the database"}
-  #   with open('/autograder/results/results.json', 'w') as file:
-  #       json.dump(results, file)
-  #   return
-
 if __name__ == "__main__":
   main()
-
-
-# { "score": 44.0, // optional, but required if not on each test case below. Overrides total of tests if specified.
-#   "execution_time": 136, // optional, seconds
-#   "output": "Text relevant to the entire submission", // optional
-#   "output_format": "simple_format", // Optional output format settings, see "Output String Formatting" below
-#   "test_output_format": "text", // Optional default output format for test case outputs, see "Output String Formatting" below
-#   "test_name_format": "text", // Optional default output format for test case names, see "Output String Formatting" below
-#   "visibility": "after_due_date", // Optional visibility setting
-#   "stdout_visibility": "visible", // Optional stdout visibility setting
-#   "extra_data": {}, // Optional extra data to be stored
-#   "tests": // Optional, but required if no top-level score
-#     [
-#         {
-#             "score": 2.0, // optional, but required if not on top level submission
-#             "max_score": 2.0, // optional
-#             "status": "passed", // optional, see "Test case status" below
-#             "name": "Your name here", // optional
-#             "name_format": "text", // optional formatting for the test case name, see "Output String Formatting" below
-#             "number": "1.1", // optional (will just be numbered in order of array if no number given)
-#             "output": "Giant multiline string that will be placed in a <pre> tag and collapsed by default", // optional
-#             "output_format": "text", // optional formatting for the test case output, see "Output String Formatting" below
-#             "tags": ["tag1", "tag2", "tag3"], // optional
-#             "visibility": "visible", // Optional visibility setting
-#             "extra_data": {} // Optional extra data to be stored
-#         },
-#         // and more test cases...
-#     ],
-#   "leaderboard": // Optional, will set up leaderboards for these values
-#     [
-#       {"name": "Accuracy", "value": .926},
-#       {"name": "Time", "value": 15.1, "order": "asc"},
-#       {"name": "Stars", "value": "*****"}
-#     ]
-# }
