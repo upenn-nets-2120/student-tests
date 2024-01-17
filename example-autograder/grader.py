@@ -7,6 +7,7 @@ import time, os
 
 SERVER_IP = os.getenv('SERVER_IP')  # EC2 instance IP of database/server
 SERVER_PORT = os.getenv('SERVER_PORT', '3000')
+SERVER_URI = f"http://{SERVER_IP}:{SERVER_PORT}"
 AUTH_TOKEN = os.getenv('AUTH_TOKEN')
 
 
@@ -59,14 +60,14 @@ def run_tests(tests):
 
 
 def upload_results(student_id, results):
-  url = f"http://{SERVER_IP}:{SERVER_PORT}/upload-results?student_id={student_id}"
+  url = f"{SERVER_URI}/upload-results?student_id={student_id}"
   headers = {'Content-Type': 'application/json', 'Authorization': AUTH_TOKEN}
   response = requests.post(url, json=results, headers=headers)
   return response
 
 
 def check_database_health():
-  url = f"http://{SERVER_IP}:{SERVER_PORT}/"
+  url = f"{SERVER_URI}/"
   headers = {'Authorization': AUTH_TOKEN}
   try:
     response = requests.get(url, headers=headers)
@@ -82,7 +83,7 @@ def get_student_id():
   
 
 def upload_tests(student_id, tests):
-  url = f"http://{SERVER_IP}:{SERVER_PORT}/submit-tests?student_id={student_id}"
+  url = f"{SERVER_URI}/submit-tests?student_id={student_id}"
   headers = {'Content-Type': 'application/json', 'Authorization': AUTH_TOKEN}
   response = requests.post(url, json=tests, headers=headers)
   return response
@@ -117,35 +118,30 @@ def main():
       {
         "name": result["name"],
         "status": "failed" if not result["result"]["success"] else "passed",
+        "score": -1.0 if not result["result"]["success"] else 0,
         "output": result["result"]["reason"],
         "visibility": "visible"
       } for result in sample_results["results"]
     ]
   }
   if sample_results["total"] != sample_results["passed"]:
-    # TODO: give different feedback message with description of failed tests
-    write_output({"output": "Test cases did not pass sample implementation. If you believe this to be an error, please contact the administrator."})
-    return
-  else:
     write_output({"output": "Test cases did not pass sample implementation.", "tests": feedback["tests"]})
-  
+    return
 
   if not check_database_health():
-    # TODO: give different feedback message with description of passed tests (from above), as well as error
-    write_output({"output": "Server is not running or not healthy. Contact the assignment administrators."})
+    write_output({"output": "Server is not running or not healthy. Contact the assignment administrators.", "tests": feedback["tests"]})
     return
 
   student_id = get_student_id()
 
   # Upload tests to the database, get response of all tests
   response = upload_tests(student_id, tests)
-  if response.status_code != 200:
-    # TODO: give different feedback message with description of passed tests (from above), as well as error
-    write_output({"output": "Error uploading tests to the database."})
+  if response.status_code != 201:
+    # TODO: modify testit-server response + handling so that duplicate tests are filtered out properly
+    write_output({"output": "Error uploading tests to the database. Contact the assignment administrators.", "tests": feedback["tests"]})
     return
   json_response = response.json()
   if not json_response['success']:
-    # TODO: give different feedback message with description of passed tests (from above), as well as error
     write_output({"output": "Failed to upload all tests"})
     return
   all_tests = response.json()['tests']
@@ -154,11 +150,22 @@ def main():
 
   all_results = run_tests(all_tests)
   stop_server(student_server)
+  
+  formatted_results = [{
+    "name": result["name"],
+    "status": "failed" if not result["result"]["success"] else "passed",
+    "score": -1.0 if not result["result"]["success"] else 0,
+    "output": result["result"]["reason"],
+    "visibility": "visible"
+  } for result in all_results["results"]]
+  feedback["tests"].extend(formatted_results)
   if all_results["total"] != all_results["passed"]:
     # TODO: give detailed feedback message with description of failed/passed tests
-    write_output({"output": "All test cases did not pass."})
+    write_output({"output": "All test cases did not pass.", "tests": feedback["tests"]})
     return
   
+  write_output({"output": "All test cases passed.", "tests": feedback["tests"]})
+
   # TODO: Upload results to the database
   # upload_response = upload_results(student_id, {"success": "All tests passed"})
   # if upload_response.status_code != 200:
