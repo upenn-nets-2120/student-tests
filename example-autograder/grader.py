@@ -5,17 +5,23 @@ import shlex
 import time, os
 
 
-SERVER_IP = os.getenv('SERVER_IP')  # EC2 instance IP of database/server
+SERVER_IP = os.getenv('SERVER_IP') # EC2 instance IP of database/server
 SERVER_PORT = os.getenv('SERVER_PORT', '3000')
 SERVER_URI = f"http://{SERVER_IP}:{SERVER_PORT}"
 AUTH_TOKEN = os.getenv('AUTH_TOKEN')
 
 
 def run_curl_command(curl_command):
-  args = shlex.split(curl_command)
+  modified_curl_command = curl_command + ' -w "\\n%{http_code}"'
+  args = shlex.split(modified_curl_command)
 
   result = subprocess.run(args, capture_output=True, text=True)
-  return result
+
+  output_parts = result.stdout.strip().split('\n')
+  response_body = '\n'.join(output_parts[:-1])
+  response_code = int(output_parts[-1])
+
+  return result.returncode, result.stdout, result.stderr, response_code, response_body
 
 
 def run_test(test):
@@ -23,18 +29,13 @@ def run_test(test):
   expected_status = test['test']['response']['status']
   expected_body = test['test']['response']['body']
 
-  curl_result = run_curl_command(curl_command)
+  returncode, _, stderr, response_code, response_body = run_curl_command(curl_command)
 
-  if curl_result.returncode != 0:
-    return {"success": False, "reason": f"Error executing test '{test['name']}': {curl_result.stderr}"}
+  if returncode != 0:
+    return {"success": False, "reason": f"Error executing test '{test['name']}':\n{stderr}"}
 
-  try:
-    response_body = json.loads(curl_result.stdout)
-  except json.JSONDecodeError:
-    return {"success": False, "reason": f"Invalid JSON response in test '{test['name']}'"}
-
-  if curl_result.returncode != expected_status:
-    return {"success": False, "reason": f"Test '{test['name']}' failed: Expected status {expected_status}, got {curl_result.returncode}"}
+  if response_code != expected_status:
+    return {"success": False, "reason": f"Test '{test['name']}' failed: Expected status {expected_status}, got {response_code}"}
 
   if response_body != expected_body:
     return {"success": False, "reason": f"Test '{test['name']}' failed: Expected body {expected_body}, got {response_body}"}
@@ -51,7 +52,7 @@ def run_tests(tests):
         "name": test["name"],
         "result": test_result
     })
-    if test_result:
+    if test_result["success"]:
       results["passed"] += 1
     else:
       results["failed"] += 1
@@ -89,7 +90,9 @@ def upload_tests(student_id, tests):
   return response
 
 
-def start_server(server_path):
+def start_server(server_path, npm_install=False):
+  if npm_install:
+    subprocess.run(["npm", "install"], cwd=server_path)
   process = subprocess.Popen(["node", "index.js"], cwd=server_path)
   time.sleep(5)
   return process
@@ -106,65 +109,72 @@ def write_output(data):
 
 
 def main():
-  sample_server = start_server("/autograder/source/sample-server")
-
+  # Read tests
   with open('tests.json', 'r') as file:
     tests = json.load(file)
 
+  # Run tests on sample server
+  sample_server = start_server("/autograder/source/sample-server")
   sample_results = run_tests(tests)
   stop_server(sample_server)
-  feedback = {
-    "tests": [
-      {
-        "name": result["name"],
-        "status": "failed" if not result["result"]["success"] else "passed",
-        "score": -1.0 if not result["result"]["success"] else 0,
-        "output": result["result"]["reason"],
-        "visibility": "visible"
-      } for result in sample_results["results"]
-    ]
-  }
+
+  # Format feedback and ensure they passed sample
+  feedback = [{
+    "name": result["name"],
+    "status": "failed" if not result["result"]["success"] else "passed",
+    "score": -1.0 if not result["result"]["success"] else 0,
+    "output": result["result"]["reason"],
+    "visibility": "visible"
+  } for result in sample_results["results"]]
+
   if sample_results["total"] != sample_results["passed"]:
-    write_output({"output": "Test cases did not pass sample implementation.", "tests": feedback["tests"]})
+    write_output({"output": "Test cases did not pass sample implementation. If you believe any of these to be a mistake, please contact the assignment administrators. Here are the outcomes of running your tests on THE SAMPLE SOLUTION.", "tests": feedback})
     return
+  output_str = "All uploaded tests passed the sample implementation!\n"
 
+  # Ensure database is running
   if not check_database_health():
-    write_output({"output": "Server is not running or not healthy. Contact the assignment administrators.", "tests": feedback["tests"]})
+    write_output({"output": "Server is not running or not healthy. Please contact the assignment administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
     return
-
   student_id = get_student_id()
 
   # Upload tests to the database, get response of all tests
   response = upload_tests(student_id, tests)
-  if response.status_code != 201:
-    # TODO: modify testit-server response + handling so that duplicate tests are filtered out properly
-    write_output({"output": "Error uploading tests to the database. Contact the assignment administrators.", "tests": feedback["tests"]})
-    return
   json_response = response.json()
-  if not json_response['success']:
-    write_output({"output": "Failed to upload all tests"})
+  if response.status_code < 200 or response.status_code >= 300 or not json_response['success']:
+    write_output({"output": "Error uploading tests to the database. Please contact the assignment administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
     return
+  if len(json_response['failedToAdd']) > 0:
+    output_str += "Failed to upload all tests to the database. Make sure test names are unique if you want them to be counted seperately! Please see the following reasons:\n\n"
+    for failure in json_response['failedToAdd']:
+      output_str += failure['name'] + ": \t" + failure['reason'] + "\n"
+    output_str += "\n"
+  else:
+    output_str += "All tests successfully uploaded to the database!\n"
   all_tests = response.json()['tests']
 
-  student_server = start_server("/autograder/submission")
-
+  # Run tests on student submission
+  student_server = start_server("/autograder/submission", npm_install=True)
   all_results = run_tests(all_tests)
   stop_server(student_server)
   
-  formatted_results = [{
+  # Format feedback and return results (note that we don't need feedback.extend because upload_tests
+  # should return EVERY test case that student has ever uploaded successfully, so that test case
+  # will just be included and re-ran).
+  feedback = [{
     "name": result["name"],
     "status": "failed" if not result["result"]["success"] else "passed",
     "score": -1.0 if not result["result"]["success"] else 0,
     "output": result["result"]["reason"],
     "visibility": "visible"
   } for result in all_results["results"]]
-  feedback["tests"].extend(formatted_results)
+
   if all_results["total"] != all_results["passed"]:
-    # TODO: give detailed feedback message with description of failed/passed tests
-    write_output({"output": "All test cases did not pass.", "tests": feedback["tests"]})
-    return
+    output_str += "\nNot all uploaded test cases passed your implementation. Please see the following breakdown.\n"
+  else:
+    output_str += "\nAll uploaded test cases passed your implementation!\n"
   
-  write_output({"output": "All test cases passed.", "tests": feedback["tests"]})
+  write_output({"output": output_str, "tests": feedback})
 
   # TODO: Upload results to the database
   # upload_response = upload_results(student_id, {"success": "All tests passed"})

@@ -94,18 +94,29 @@ app.post('/submit-tests', authorize, express.json(), async (req, res) => {
     testCase.passedDefault ??= true;
     testCase.timesRan ??= 0;
     testCase.timesRanSuccessfully ??= 0;
+    testCase.numStudentsRan ??= 0;
+    testCase.numStudentsRanSuccessfully ??= 0;
 
     const existingTestCase = await testsCollection.findOne({ name: testCase.name });
     if (existingTestCase) {
-      console.log("Test " + testCase.name + " already exists!");
-      result.failedToAdd.push({"name": testCase.name, "reason": "Test case already exists"});
+      if (existingTestCase.author === author) {
+        // Author is the same, update the existing test case
+        await testsCollection.updateOne({ name: testCase.name }, { $set: testCase });
+        console.log("Test " + testCase.name + " updated!");
+      } else {
+        // Different author, cannot overwrite
+        console.log("Test " + testCase.name + " already exists by a different author!");
+        result.failedToAdd.push({ "name": testCase.name, "reason": "Test case already exists by a different author!" });
+      }
+    } else {
+      processedTestCases.push(testCase);
     }
-
-    processedTestCases.push(testCase);
   }
 
   try {
-    await testsCollection.insertMany(processedTestCases);
+    if (processedTestCases.length > 0) {
+      await testsCollection.insertMany(processedTestCases);
+    }
     result.success = true;
 
     const returnedTests = await testsCollection.find({ $or: [{ public: true }, { author: author }] }).toArray();
@@ -114,6 +125,7 @@ app.post('/submit-tests', authorize, express.json(), async (req, res) => {
     res.status(201).send(result);
   } catch (err) {
     result.success = false;
+    console.log("Failed to upload tests:", err)
     res.status(500).send(result);
   }
 });
