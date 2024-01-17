@@ -52,7 +52,7 @@ app.get('/view-tests', (req, res) => {
     }
 
     let html = '<table border="1">';
-    html += '<tr><th>ID</th><th>Name</th><th>Description</th><th>Command</th><th>Response Status</th><th>Response Body</th><th>Author</th><th>Public</th><th>Passed Default</th><th>Times Ran</th><th>Times Ran Successfully</th></tr>';
+    html += '<tr><th>ID</th><th>Name</th><th>Description</th><th>Command</th><th>Response Status</th><th>Response Body</th><th>Author</th><th>Public</th><th>Passed Default</th><th>Times Ran</th><th>Times Ran Successfully</th><th>Num Students Ran</th><th>Num Students Ran Successfully</th></tr>';
 
     items.forEach(test => {
       html += `<tr>`;
@@ -67,6 +67,8 @@ app.get('/view-tests', (req, res) => {
       html += `<td>${test.passedDefault}</td>`;
       html += `<td>${test.timesRan}</td>`;
       html += `<td>${test.timesRanSuccessfully}</td>`;
+      html += `<td>${test.numStudentsRan}</td>`;
+      html += `<td>${test.numStudentsRanSuccessfully}</td>`;
       html += `</tr>`;
     });
 
