@@ -3,6 +3,7 @@ import subprocess
 import requests
 import shlex
 import time, os
+import re
 
 
 SERVER_IP = os.getenv('SERVER_IP') # EC2 instance IP of database/server
@@ -75,17 +76,26 @@ def get_student_id():
   with open('/autograder/submission_metadata.json', 'r') as file:
     metadata = json.load(file)
     return metadata['users'][0]['id']
-  
 
-def upload_tests(student_id, tests):
-  url = f"{SERVER_URI}/submit-tests?student_id={student_id}"
+
+def get_assignment_title():
+  with open('/autograder/submission_metadata.json', 'r') as file:
+    metadata = json.load(file)
+    title = metadata['assignment']['title']
+    safe_title = re.sub(r'\s+', '_', title)
+    safe_title = re.sub(r'[^\w-]', '', safe_title)
+    return safe_title
+
+
+def upload_tests(assignment_title, student_id, tests):
+  url = f"{SERVER_URI}/submit-tests/{assignment_title}?student_id={student_id}"
   headers = {'Content-Type': 'application/json', 'Authorization': AUTH_TOKEN}
   response = requests.post(url, json=tests, headers=headers)
   return response
 
 
-def upload_results(student_id, results):
-  url = f"{SERVER_URI}/submit-results?student_id={student_id}"
+def upload_results(assignment_title, student_id, results):
+  url = f"{SERVER_URI}/submit-results/{assignment_title}?student_id={student_id}"
   headers = {'Content-Type': 'application/json', 'Authorization': AUTH_TOKEN}
   response = requests.post(url, json=results, headers=headers)
   return response
@@ -131,7 +141,7 @@ def main():
       "name": "SAMPLE SOLUTION RESULT: " + result["name"],
       "status": "failed" if not result["result"]["success"] else "passed",
       "score": 0 if not result["result"]["success"] else 0,
-      "output": result["result"]["reason"],
+      "output": "Description: " + result["test"]["description"] + "\n\n" + result["result"]["reason"] if "description" in result["test"] and result["test"]["description"] else result["result"]["reason"],
       "visibility": "visible"
     } for result in sample_results["results"]]
     successful_tests = [result["test"] for result in sample_results["results"] if result["result"]["success"]]
@@ -150,9 +160,10 @@ def main():
     write_output({"output": "Server is not running or not healthy. Please contact the assignment administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
     return
   student_id = get_student_id()
+  assignment_title = get_assignment_title()
 
   # Upload tests to the database, get response of all tests
-  response = upload_tests(student_id, successful_tests)
+  response = upload_tests(assignment_title, student_id, successful_tests)
   json_response = response.json()
   if response.status_code < 200 or response.status_code >= 300 or not json_response['success']:
     write_output({"output": "Error uploading tests to the database. Please contact the assignment administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
@@ -176,7 +187,7 @@ def main():
     "name": result["name"],
     "status": "failed" if not result["result"]["success"] else "passed",
     "score": 0 if not result["result"]["success"] else 0,
-    "output": result["result"]["reason"],
+    "output": "Description: " + result["test"]["description"] + "\n\n" + result["result"]["reason"] if "description" in result["test"] and result["test"]["description"] else result["result"]["reason"],
     "visibility": "visible"
   } for result in all_results["results"]]
 
@@ -188,7 +199,7 @@ def main():
     output_str += "\nAll available test cases passed your implementation!\n"
 
   # Upload results to the database
-  upload_response = upload_results(student_id, [{"name": result["name"], "passed": result["result"]["success"]} for result in all_results["results"]])
+  upload_response = upload_results(assignment_title, student_id, [{"name": result["name"], "passed": result["result"]["success"]} for result in all_results["results"]])
   if upload_response.status_code != 200:
     output_str += "\nError uploading results to the database. Please contact the assignment administrators. You can still see the results of the test cases below, but the updated statistics have not been uploaded.\n"
   

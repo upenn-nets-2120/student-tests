@@ -12,7 +12,6 @@
   },
   {
     "name": "Test case 2",
-    "description": "optional desc",
     "public": true,
     "test": {
       "command": "curl -X GET http://localhost:3000/error",
