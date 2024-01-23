@@ -12,6 +12,13 @@ SERVER_URI = f"http://{SERVER_IP}:{SERVER_PORT}"
 AUTH_TOKEN = os.getenv('AUTH_TOKEN')
 
 
+def load_config():
+  global num_public_tests_for_access
+  with open('config.json', 'r') as file:
+    config = json.load(file)
+    num_public_tests_for_access = config['numPublicTestsForAccess']
+
+
 def run_curl_command(curl_command):
   modified_curl_command = curl_command + ' -w "\\n%{http_code}"'
   args = shlex.split(modified_curl_command)
@@ -23,6 +30,64 @@ def run_curl_command(curl_command):
   response_code = int(output_parts[-1])
 
   return result.returncode, result.stdout, result.stderr, response_code, response_body
+
+
+def run_junit_test(junit_path, test_class, classpath):
+  """
+  Runs a JUnit test and captures the result.
+
+  :param junit_path: Path to junit.jar.
+  :param test_class: Fully qualified name of the test class to run.
+  :param classpath: Classpath including the project classes and JUnit.
+  :return: A dictionary with the test results.
+  """
+  # Construct the Java command
+  command = [
+    'java',
+    '-cp',
+    f"{junit_path}:{classpath}", # For Windows, use ';' instead of ':'
+    'org.junit.runner.JUnitCore',
+    test_class
+  ]
+  # java -cp .:/usr/share/java/junit.jar org.junit.runner.JUnitCore [test class name]
+  
+  result = subprocess.run(command, capture_output=True, text=True)
+  
+  output = result.stdout + result.stderr
+  if result.returncode != 0:
+    return {'success': False, 'output': output}
+  return parse_junit_output(output)
+
+def parse_junit_output(output):
+  """
+  Parses the console output from a JUnit test run to extract results.
+
+  :param output: Console output as a string.
+  :return: A dictionary with parsed test results.
+  """
+  test_results = {
+    'success': False,
+    'run': 0,
+    'failures': [],
+    'errors': []
+  }
+
+  # Basic parsing logic - customize as needed based on your output
+  if "FAILURES!!!" in output:
+    test_results['success'] = False
+    failure_matches = re.findall(r"test(.*)\((.*)\)", output)
+    for match in failure_matches:
+      test_results['failures'].append({'test': match[0].strip(), 'class': match[1]})
+  else:
+    test_results['success'] = True
+  
+  run_matches = re.search(r"Tests run: (\d+),", output)
+  if run_matches:
+    test_results['run'] = int(run_matches.group(1))
+  
+  # Errors parsing can be added similarly
+  
+  return test_results
 
 
 def run_test(test):
@@ -87,10 +152,10 @@ def get_assignment_title():
     return safe_title
 
 
-def upload_tests(assignment_title, student_id, tests):
+def upload_tests(assignment_title, student_id, tests, params):
   url = f"{SERVER_URI}/submit-tests/{assignment_title}?student_id={student_id}"
   headers = {'Content-Type': 'application/json', 'Authorization': AUTH_TOKEN}
-  response = requests.post(url, json=tests, headers=headers)
+  response = requests.post(url, params=params, json=tests, headers=headers)
   return response
 
 
@@ -122,6 +187,8 @@ def write_output(data):
 
 
 def main():
+  load_config()
+  
   # Read tests
   try:
     with open('tests.json', 'r') as file:
@@ -163,7 +230,7 @@ def main():
   assignment_title = get_assignment_title()
 
   # Upload tests to the database, get response of all tests
-  response = upload_tests(assignment_title, student_id, successful_tests)
+  response = upload_tests(assignment_title, student_id, successful_tests, {"num_public_tests": num_public_tests_for_access})
   json_response = response.json()
   if response.status_code < 200 or response.status_code >= 300 or not json_response['success']:
     write_output({"output": "Error uploading tests to the database. Please contact the assignment administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})

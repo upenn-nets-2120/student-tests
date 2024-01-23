@@ -171,6 +171,8 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
   }
   console.log("Recieving tests from Student ID " + author);
 
+  const numPublicTestsForAccess = req.query.num_public_tests ?? 1
+
   const result = {failedToAdd: []};
   const processedTestCases = [];
   for (const testCase of testCases) {
@@ -209,10 +211,16 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
     }
     result.success = true;
 
-    const authorHasPublicTest = await collection.findOne({ author: author, public: true });
+    const authorPublicTestCount = await collection.aggregate([
+      { $match: { author: author, public: true } },
+      { $group: { _id: "$author", count: { $sum: 1 } } }
+    ]).toArray();
 
-    const returnedTests = !authorHasPublicTest ? await collection.find({ isDefault: true }).toArray() : await collection.find({ $or: [{ public: true }, { author: author }, { isDefault: true }] }).toArray();
-    result.tests = returnedTests;
+    if (authorPublicTestCount.length > 0 && authorPublicTestCount[0].count >= numPublicTestsForAccess) {
+      result.tests = await collection.find({ $or: [{ public: true }, { author: author }, { isDefault: true }] }).toArray();
+    } else {
+      result.tests = await collection.find({ isDefault: true }).toArray();
+    }
 
     res.status(201).send(result);
   } catch (err) {
