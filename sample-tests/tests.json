@@ -2,6 +2,7 @@
   {
     "name": "Test case 1",
     "description": "optional desc",
+    "type": "curl",
     "test": {
       "command": "curl -X GET http://localhost:3000/",
       "response": {
@@ -12,6 +13,7 @@
   },
   {
     "name": "Test case 2",
+    "type": "curl",
     "public": true,
     "test": {
       "command": "curl -X GET http://localhost:3000/error",
@@ -19,6 +21,14 @@
         "status": 200,
         "body": "Not found"
       }
+    }
+  },
+  {
+    "name": "ClassNameFromJUnit",
+    "type": "junit",
+    "public": false,
+    "test": {
+      "content": "ACTUAL CODE OF THE CLASS FILE"
     }
   }
 ]
