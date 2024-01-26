@@ -8,3 +8,7 @@ pip3 install requests
 cd /autograder/source/sample-server
 
 npm install
+
+cd /autograder/source
+
+python3 /autograder/source/grader-setup.py
