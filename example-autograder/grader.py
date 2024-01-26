@@ -2,7 +2,7 @@ import json
 import subprocess
 import requests
 import shlex
-import time, os
+import time, os, sys
 import re
 
 
@@ -192,7 +192,7 @@ def main():
   # Read tests
   try:
     with open('tests.json', 'r') as file:
-        tests = json.load(file)
+      tests = json.load(file)
   except:
     tests = []
   
@@ -272,5 +272,75 @@ def main():
   
   write_output({"output": output_str, "tests": feedback})
 
+def setup():
+  load_config()
+  
+  # Read default tests
+  try:
+    with open('default-tests.json', 'r') as file:
+      tests = json.load(file)
+  except:
+    tests = []
+  
+  output_str = ""
+  if len(tests) > 0:
+    # Run tests on sample server
+    sample_server = start_server("/autograder/source/sample-server")
+    sample_results = run_tests(tests)
+    stop_server(sample_server)
+
+    feedback = [{
+      "name": "SAMPLE SOLUTION RESULT: " + result["name"],
+      "status": "failed" if not result["result"]["success"] else "passed",
+      "score": 0 if not result["result"]["success"] else 0,
+      "output": "Description: " + result["test"]["description"] + "\n\n" + result["result"]["reason"] if "description" in result["test"] and result["test"]["description"] else result["result"]["reason"],
+      "visibility": "visible"
+    } for result in sample_results["results"]]
+    successful_tests = [result["test"] for result in sample_results["results"] if result["result"]["success"]]
+
+    if sample_results["total"] != sample_results["passed"]:
+      output_str += "Some test cases did not pass sample implementation. Only test cases that pass this sample may be uploaded. You can find the outcomes of running your tests on THE SAMPLE SOLUTION below.\n"
+    else:
+      output_str += "All uploaded tests passed the sample implementation!\n"
+  else:
+    output_str += "No default tests were uploaded.\n"
+    feedback = []
+    successful_tests = []
+
+  test_response = ""
+  for test in feedback:
+    test_response += test['name'] + ": " + test['status'] + "\n"
+    test_response += test['output'] + "\n\n"
+
+  # Ensure database is running
+  if not check_database_health():
+    print("Server is not running or not healthy. Please contact the database administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str + "\n" + test_response)
+    return
+  assignment_title = get_assignment_title()
+
+  # Upload tests to the database, get response of all tests
+  response = upload_tests(assignment_title, -1, successful_tests, {"num_public_tests": num_public_tests_for_access})
+  json_response = response.json()
+  if response.status_code < 200 or response.status_code >= 300 or not json_response['success']:
+    print("Error uploading tests to the database. Please contact the database administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str + "\n" + test_response)
+    return
+  if len(json_response['failedToAdd']) > 0:
+    output_str += "Failed to upload all tests to the database. Make sure test names are unique if you want them to be counted seperately! Please see the following reasons:\n\n"
+    for failure in json_response['failedToAdd']:
+      output_str += failure['name'] + ": \t" + failure['reason'] + "\n"
+    output_str += "\n"
+  elif len(successful_tests) > 0:
+    output_str += "All tests successfully uploaded to the database!\n"
+
+  print(output_str)
+
 if __name__ == "__main__":
-  main()
+  if len(sys.argv) == 2:
+    if sys.argv[1] == "--setup":
+      setup()
+    else:
+      print("Invalid argument. Use --setup in autograder setup.")
+  elif len(sys.argv) == 1:
+    main()
+  else:
+    print("Invalid number of arguments. Use --setup in autograder setup.")

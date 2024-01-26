@@ -11,4 +11,4 @@ npm install
 
 cd /autograder/source
 
-python3 /autograder/source/grader-setup.py
+python3 /autograder/source/grader.py --setup
