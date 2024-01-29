@@ -4,7 +4,7 @@ services:
   app:
     build: .
     ports:
-      - "3000:3000"
+      - "3001:3000"
     links:
       - db
     depends_on:
@@ -17,6 +17,15 @@ services:
     image: mongo
     volumes:
       - mongodb_data:/data/db
+
+  react-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.react
+    ports:
+      - "3000:3000"
+    depends_on:
+      - app
 
 volumes:
   mongodb_data:

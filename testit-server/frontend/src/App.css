@@ -1,0 +1,11 @@
+.App {
+  text-align: center;
+}
+
+.App-banner {
+  background-color: #aaddff;
+  padding: 5px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}

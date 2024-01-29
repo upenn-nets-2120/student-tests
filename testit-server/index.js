@@ -1,6 +1,8 @@
 const express = require('express');
+const cors = require('cors');
 const MongoClient = require('mongodb').MongoClient;
 const app = express();
+app.use(cors());
 const port = 3000;
 
 const url = process.env.DB_URL;
@@ -19,6 +21,12 @@ const authorize = (req, res, next) => {
   next();
 };
 
+const checkAuth = (req, res, next) => {
+  const token = req.headers['authorization'];
+  req.isAuthorized = !(!token || token !== AUTH_TOKEN);
+  next();
+};
+
 MongoClient.connect(url, { useNewUrlParser: true, useUnifiedTopology: true }, (err, client) => {
   if (err) {
     return console.log(err);
@@ -34,7 +42,7 @@ app.get('/', (req, res) => {
   res.status(200).send('ok');
 });
 
-app.get('/view-collections', async (req, res) => {
+app.get('/get-collections', async (req, res) => {
   db.listCollections().toArray((err, collections) => {
     if (err) {
       console.error('Error listing collections:', err);
@@ -84,6 +92,24 @@ app.get('/view-tests/:assignmentName', (req, res) => {
     html += '</table>';
 
     res.send(html);
+  });
+});
+
+app.get('/get-tests/:assignmentName', checkAuth, (req, res) => {
+  const assignmentName = req.params.assignmentName;
+  const collection = db.collection(`tests-${assignmentName}`);
+
+  collection.find({ public: true }).toArray((err, items) => {
+    if (err) {
+      res.status(500).send('Error fetching tests from database');
+      return;
+    }
+
+    if (!req.isAuthorized) {
+      items = items.map(({ test, studentsRan, studentsRanSuccessfully, public, visibility, isDefault, ...rest }) => rest);
+    }
+
+    res.status(200).json(items);
   });
 });
 
