@@ -28,7 +28,7 @@ const Root = () => {
     if (localStorage.getItem('token')) {
       setIsLoggedIn(true);
     }
-  }, []);
+  }, [localStorage.getItem('token')]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');

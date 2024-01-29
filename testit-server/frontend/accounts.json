@@ -1,0 +1,8 @@
+[
+  {
+    "username": "admin",
+    "gradescope_id": "-1",
+    "admin": true,
+    "password": "sample-admin-password"
+  }
+]

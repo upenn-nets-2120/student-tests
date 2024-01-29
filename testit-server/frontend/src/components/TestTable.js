@@ -1,26 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TextField, Button, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TextField, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import ThumbUpIcon from '@mui/icons-material/ThumbUp';
+import ThumbDownIcon from '@mui/icons-material/ThumbDown';
 
 const TestTable = ({ assignment }) => {
   const [allTests, setAllTests] = useState([]);
   const [displayedTests, setDisplayedTests] = useState([]);
-  const [sortField, setSortField] = useState('timesRanSuccessfully');
-  const [sortDirectionAsc, setSortDirectionAsc] = useState(true);
+  const [sortField, setSortField] = useState('numLiked');
+  const [sortDirectionAsc, setSortDirectionAsc] = useState(false);
   const [filterField, setFilterField] = useState('');
   const [filterValue, setFilterValue] = useState('');
 
   useEffect(() => {
     axios.get(`http://${process.env.REACT_APP_SERVER_IP}/get-tests/${assignment}`,
-      { headers: { 'Authorization': `auth_temp_token` } })
+      { headers: { 'Authorization': localStorage.getItem('token') } })
       .then(response => {
         setAllTests(response.data);
-        sortTests(response.data);
       })
-      .catch(error => console.error('Error fetching tests:', error));
-  }, [assignment]);
+      .catch(error => {
+        console.error('Error fetching tests:', error);
+        setAllTests([]);
+      });
+  }, [localStorage.getItem('token'), assignment]);
+
+  useEffect(() => {
+    const filteredTests = !filterField || filterValue === '' ? allTests : allTests.filter(test => 
+      test[filterField]?.toString().toLowerCase().includes(filterValue.toLowerCase()) ?? false
+    );
+
+    const sortedTests = [...filteredTests].sort((a, b) => {
+      let comparison = 0;
+      if (a[sortField] < b[sortField]) comparison = -1;
+      if (a[sortField] > b[sortField]) comparison = 1;
+      if (!sortDirectionAsc) comparison *= -1;
+      return comparison;
+    });
+
+    setDisplayedTests(sortedTests);
+  }, [allTests, filterField, filterValue, sortField, sortDirectionAsc]);
 
   const clickSort = (field) => {
     if (field === sortField) {
@@ -29,34 +49,88 @@ const TestTable = ({ assignment }) => {
       setSortField(field);
       setSortDirectionAsc(true);
     }
-    sortTests(displayedTests);
   }
 
-  const sortTests = (valuesToSort) => {
-    const sortedTests = [...valuesToSort].sort((a, b) => {
-      let comparison = 0;
-      if (a[sortField] < b[sortField]) comparison = -1;
-      if (a[sortField] > b[sortField]) comparison = 1;
-      if (sortDirectionAsc === 'desc') comparison *= -1;
-      return comparison;
-    });
+  const like = async (testId) => {
+    try {
+      const response = await axios.post(`http://${process.env.REACT_APP_SERVER_IP}/like-test/${assignment}/${testId}`,
+        {}, { headers: { 'Authorization': localStorage.getItem('token') } });
+      if (response.status === 200) {
+        setAllTests(allTests => [...allTests].map(test => {
+          if (test._id === testId) {
+            const updatedTest = {
+              ...test,
+              numLiked: test.userLiked ? test.numLiked : test.numLiked + 1,
+              numDisliked: test.userDisliked ? test.numDisliked - 1 : test.numDisliked,
+              userLiked: true,
+              userDisliked: false
+            };
+            // if ('studentsLiked' in test && 'studentsDisliked' in test) {
+            //   updatedTest.studentsLiked = isAlreadyLiked ? test.studentsLiked : [...test.studentsLiked, 'currentUser'];
+            //   updatedTest.studentsDisliked = test.studentsDisliked.filter(username => username !== 'currentUser');
+            // }
+            return updatedTest;
+          }
+          return test;
+        }));
+        setDisplayedTests(displayedTests => [...displayedTests]);
+      }
+    } catch (error) {
+      console.error('Error liking the test:', error);
+    }
+  };
 
-    setDisplayedTests(sortedTests);
+  const dislike = async (testId) => {
+    try {
+      const response = await axios.post(`http://${process.env.REACT_APP_SERVER_IP}/dislike-test/${assignment}/${testId}`,
+        {}, { headers: { 'Authorization': localStorage.getItem('token') } });
+      if (response.status === 200) {
+        setAllTests(allTests => [...allTests].map(test => {
+          if (test._id === testId) {
+            const updatedTest = {
+              ...test,
+              numLiked: test.userLiked ? test.numLiked - 1 : test.numLiked,
+              numDisliked: test.userDisliked ? test.numDisliked : test.numDisliked + 1,
+              userLiked: false,
+              userDisliked: true
+            };
+            // if ('studentsLiked' in test && 'studentsDisliked' in test) {
+            //   updatedTest.studentsLiked = test.studentsLiked.filter(username => username !== 'currentUser');
+            //   updatedTest.studentsDisliked = isAlreadyDisliked ? test.studentsDisliked : [...test.studentsDisliked, 'currentUser'];
+            // }
+            return updatedTest;
+          }
+          return test;
+        }));
+        setDisplayedTests(displayedTests => [...displayedTests]);
+      }
+    } catch (error) {
+      console.error('Error disliking the test:', error);
+    }
+  };
+
+  const getThumbsIcon = (test) => {
+    return (
+      <>
+        <ThumbUpIcon
+          color={test.userLiked ? "primary" : "disabled"}
+          onClick={() => like(test._id)}
+          style={{ cursor: 'pointer' }}
+        />
+        <ThumbDownIcon
+          color={test.userDisliked ? "secondary" : "disabled"}
+          onClick={() => dislike(test._id)}
+          style={{ cursor: 'pointer' }}
+        />
+      </>
+    );
   };
 
   const getSortIcon = (field) => {
     if (field !== sortField) {
       return null;
     }
-    return sortDirectionAsc ? <ArrowUpwardIcon fontSize="tiny" /> : <ArrowDownwardIcon fontSize="tiny" />;
-  };
-
-  const filterTests = () => {
-    const filteredTests = allTests.filter(test => 
-      test[filterField]?.toString().toLowerCase().includes(filterValue.toLowerCase()) ?? true
-    );
-
-    sortTests(filteredTests);
+    return sortDirectionAsc ? <ArrowDownwardIcon fontSize="tiny" /> : <ArrowUpwardIcon fontSize="tiny" />;
   };
 
   return (
@@ -77,6 +151,8 @@ const TestTable = ({ assignment }) => {
           <MenuItem value="numStudentsRan"># Students Ran</MenuItem>
           <MenuItem value="numStudentsRanSuccessfully"># Students Ran Successfully</MenuItem>
           <MenuItem value="createdAt">Created At</MenuItem>
+          <MenuItem value="numLiked">Likes</MenuItem>
+          <MenuItem value="numDisliked">Dislikes</MenuItem>
           {/* TODO: Add other options */}
         </Select>
       </FormControl>
@@ -88,9 +164,6 @@ const TestTable = ({ assignment }) => {
         onChange={e => setFilterValue(e.target.value)}
         style={{ margin: 8 }}
       />
-      <Button variant="contained" color="primary" onClick={filterTests} style={{ marginTop: 8 }}>
-        Filter
-      </Button>
       <TableContainer component={Paper}>
         <Table aria-label="simple table">
           <TableHead>
@@ -104,7 +177,9 @@ const TestTable = ({ assignment }) => {
               <TableCell onClick={() => clickSort('numStudentsRan')}># Students Ran {getSortIcon('numStudentsRan')}</TableCell>
               <TableCell onClick={() => clickSort('numStudentsRanSucc')}># Students Ran Successfully {getSortIcon('numStudentsRanSucc')}</TableCell>
               <TableCell onClick={() => clickSort('createdAt')}>Created At {getSortIcon('createdAt')}</TableCell>
-              {/* TODO: Add others */}
+              <TableCell onClick={() => clickSort('numLiked')}>Likes {getSortIcon('numLiked')}</TableCell>
+              <TableCell onClick={() => clickSort('numDisliked')}>Dislikes {getSortIcon('numDisliked')}</TableCell>
+              <TableCell>Reaction</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -119,6 +194,9 @@ const TestTable = ({ assignment }) => {
                 <TableCell>{test.numStudentsRan}</TableCell>
                 <TableCell>{test.numStudentsRanSuccessfully}</TableCell>
                 <TableCell>{test.createdAt}</TableCell>
+                <TableCell>{test.numLiked}</TableCell>
+                <TableCell>{test.numDisliked}</TableCell>
+                <TableCell>{getThumbsIcon(test)}</TableCell>
               </TableRow>
             ))}
           </TableBody>

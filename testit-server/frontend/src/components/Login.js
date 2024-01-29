@@ -11,7 +11,7 @@ const Login = () => {
     if (localStorage.getItem('token')) {
       navigate('/');
     }
-  }, [navigate]);
+  }, [navigate, localStorage.getItem('token')]);
 
   const handleLogin = async () => {
     if (username && password) {

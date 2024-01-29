@@ -2,7 +2,8 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
-const MongoClient = require('mongodb').MongoClient;
+const mongodb = require('mongodb');
+const MongoClient = mongodb.MongoClient;
 const app = express();
 app.use(cors());
 const port = 3000;
@@ -24,18 +25,11 @@ const authorize = (req, res, next) => {
   next();
 };
 
-// Middleware that adds a variable indicating authorized or not
-const checkAuth = (req, res, next) => {
-  const token = req.headers['authorization'];
-  req.isAuthorized = !(!token || token !== AUTH_TOKEN);
-  next();
-};
-
 // Middleware that with authenticate users (students) when they're logged in
 const authenticateToken = (req, res, next) => {
   const token = req.headers['authorization'];
   if (token == null) {
-    return res.sendStatus(401);
+    return res.sendStatus(403);
   }
 
   jwt.verify(token, SIGNING_TOKEN, (err, user) => {
@@ -73,12 +67,18 @@ MongoClient.connect(url, { useNewUrlParser: true, useUnifiedTopology: true }, (e
   });
 });
 
-app.post('/create-accounts', express.json(), async (req, res) => {
+app.post('/set-accounts', authorize, express.json(), async (req, res) => {
   const users = db.collection('users');
   const accounts = req.body;
 
   if (!Array.isArray(accounts)) {
     return res.status(400).send('Input should be an array of user accounts');
+  }
+
+  try {
+    await users.deleteMany({});
+  } catch (err) {
+    return res.status(500).send('Failed to delete existing accounts');
   }
 
   const preparedAccounts = await Promise.all(accounts.map(async account => {
@@ -104,7 +104,8 @@ app.post('/login', express.json(), async (req, res) => {
 
   if (user) {
     if (await bcrypt.compare(password, user.password)) {
-      const token = jwt.sign({ username }, SIGNING_TOKEN, { expiresIn: '1w' });
+      const { password, ...userToSign } = user;
+      const token = jwt.sign(userToSign, SIGNING_TOKEN, { expiresIn: '1w' });
       res.json({ token });
     } else {
       res.status(400).send('Invalid password');
@@ -132,18 +133,30 @@ app.get('/get-collections', async (req, res) => {
   });
 });
 
-app.get('/get-tests/:assignmentName', checkAuth, (req, res) => {
+// TODO: Make sure visibility works properly with this route
+// TODO: Make filtering done as part of the mongo query?
+app.get('/get-tests/:assignmentName', authenticateToken, (req, res) => {
   const assignmentName = req.params.assignmentName;
   const collection = db.collection(`tests-${assignmentName}`);
 
-  collection.find({ public: true }).toArray((err, items) => {
+  const userIsAdmin = req.user.admin;
+
+  collection.find(userIsAdmin ? {} : { public: true }).toArray((err, items) => {
     if (err) {
       res.status(500).send('Error fetching tests from database');
       return;
     }
 
-    if (!req.isAuthorized) {
-      items = items.map(({ test, studentsRan, studentsRanSuccessfully, public, visibility, isDefault, ...rest }) => rest);
+    items = items.map(item => ({
+      ...item,
+      numLiked: Array.isArray(item.studentsLiked) ? item.studentsLiked.length : 0,
+      numDisliked: Array.isArray(item.studentsDisliked) ? item.studentsDisliked.length : 0,
+      userLiked: Array.isArray(item.studentsLiked) ? item.studentsLiked.includes(req.user.username) : false,
+      userDisliked: Array.isArray(item.studentsDisliked) ? item.studentsDisliked.includes(req.user.username) : false,
+    }));
+
+    if (!userIsAdmin) {
+      items = items.map(({ test, studentsRan, studentsRanSuccessfully, studentsLiked, studentsDisliked, public, visibility, isDefault, ...rest }) => rest);
     }
 
     res.status(200).json(items);
@@ -195,7 +208,7 @@ app.delete('/delete-test/:assignmentName', authorize, (req, res) => {
   if (testName) {
     deleteCriteria = { name: testName };
   } else if (testId) {
-    deleteCriteria = { _id: new ObjectId(testId) };
+    deleteCriteria = { _id: new mongodb.ObjectId(testId) };
   } else {
     return res.status(400).send('Error: testName or testId query parameter is required.');
   }
@@ -247,6 +260,8 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
     testCase.numStudentsRanSuccessfully = 0;
     testCase.studentsRan = [];
     testCase.studentsRanSuccessfully = [];
+    testCase.studentsLiked = [];
+    testCase.studentsDisliked = [];
     testCase.createdAt = new Date();
     testCase.public ??= true;
     testCase.visibility = "limited"; // 3 options, full (actual content of test can be seen), limited (only name, description, and feedback), none (only author can see)
@@ -344,6 +359,62 @@ app.post('/submit-results/:assignmentName', authorize, express.json(), async (re
 
   result.success = result.failedToUpdate.length === 0;
   res.status(result.success ? 200 : 500).send(result);
+});
+
+app.post('/like-test/:assignmentName/:testId', authenticateToken, async (req, res) => {
+  const { assignmentName, testId } = req.params;
+  const student = req.user.username;
+
+  const collection = db.collection(`tests-${assignmentName}`);
+  const test = await collection.findOne({ _id: new mongodb.ObjectId(testId), studentsLiked: student });
+  if (test) {
+    return res.status(400).send('Test already liked');
+  }
+
+  await collection.updateOne({ _id: new mongodb.ObjectId(testId) }, { $pull: { studentsDisliked: student } });
+  await collection.updateOne({ _id: new mongodb.ObjectId(testId) }, { $addToSet: { studentsLiked: student } });
+
+  res.status(200).send('Test liked successfully');
+});
+
+app.post('/dislike-test/:assignmentName/:testId', authenticateToken, async (req, res) => {
+  const { assignmentName, testId } = req.params;
+  const student = req.user.username;
+
+  const collection = db.collection(`tests-${assignmentName}`);
+  const test = await collection.findOne({ _id: new mongodb.ObjectId(testId), studentsDisliked: student });
+  if (test) {
+    return res.status(400).send('Test already disliked');
+  }
+
+  await collection.updateOne({ _id: new mongodb.ObjectId(testId) }, { $pull: { studentsLiked: student } });
+  await collection.updateOne({ _id: new mongodb.ObjectId(testId) }, { $addToSet: { studentsDisliked: student } });
+
+  res.status(200).send('Test disliked successfully');
+});
+
+app.delete('/delete-test/:assignmentName/:testId', authenticateToken, async (req, res) => {
+  const { assignmentName, testId } = req.params;
+  const collection = db.collection(`tests-${assignmentName}`);
+
+  const testCase = await collection.findOne({ _id: new mongodb.ObjectId(testId) });
+  if (!testCase) {
+    return res.status(404).send('Test not found');
+  }
+
+  const userIsAdmin = req.user.admin;
+  const userIsAuthor = req.user.gradescope_id === testCase.author;
+
+  if (!userIsAdmin && !userIsAuthor) {
+    return res.status(403).send('Not authorized to delete this test');
+  }
+
+  const result = await collection.deleteOne({ _id: new mongodb.ObjectId(testId) });
+  if (result.deletedCount === 0) {
+    return res.status(500).send('Failed to delete the test');
+  }
+
+  res.status(200).send('Test deleted successfully');
 });
 
 // TODO: Remove this eventually
