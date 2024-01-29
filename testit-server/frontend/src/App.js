@@ -1,5 +1,8 @@
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import AssignmentSelector from './components/AssignmentSelector';
+import Login from './components/Login';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import Button from '@mui/material/Button';
 import styled from '@emotion/styled';
 
@@ -16,17 +19,43 @@ const StyledButton = styled(Button)({
   },
 });
 
-function App() {
+const Root = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    if (localStorage.getItem('token')) {
+      setIsLoggedIn(true);
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setIsLoggedIn(false);
+  }
+
   return (
     <div className="App">
       <div className="App-banner">
         <h1>Student Test Cases</h1>
-        <StyledButton onClick={() => {/* handle login logic here */}}>
-          Log In
+        <StyledButton onClick={() => isLoggedIn ? handleLogout() : (location.pathname === '/login' ? navigate('/') : navigate('/login'))}>
+          {isLoggedIn ? 'Log Out' : (location.pathname === '/login' ? 'Home' : 'Log In')}
         </StyledButton>
       </div>
-      <AssignmentSelector />
+      <Routes>
+        <Route path="/" element={<AssignmentSelector />} />
+        <Route path="/login" element={<Login />} />
+      </Routes>
     </div>
+  );
+}
+
+function App() {  
+  return (
+    <Router>
+      <Root />
+    </Router>
   );
 }
 

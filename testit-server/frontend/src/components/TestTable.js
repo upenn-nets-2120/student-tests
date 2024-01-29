@@ -13,7 +13,8 @@ const TestTable = ({ assignment }) => {
   const [filterValue, setFilterValue] = useState('');
 
   useEffect(() => {
-    axios.get(`http://localhost:3001/get-tests/${assignment}`, { headers: { 'Authorization': `auth_temp_token` } })
+    axios.get(`http://${process.env.REACT_APP_SERVER_IP}/get-tests/${assignment}`,
+      { headers: { 'Authorization': `auth_temp_token` } })
       .then(response => {
         setAllTests(response.data);
         sortTests(response.data);
@@ -52,7 +53,7 @@ const TestTable = ({ assignment }) => {
 
   const filterTests = () => {
     const filteredTests = allTests.filter(test => 
-      test[filterField]?.toString().toLowerCase().includes(filterValue.toLowerCase())
+      test[filterField]?.toString().toLowerCase().includes(filterValue.toLowerCase()) ?? true
     );
 
     sortTests(filteredTests);

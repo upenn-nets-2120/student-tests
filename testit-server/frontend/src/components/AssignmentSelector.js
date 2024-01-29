@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import TestTable from './TestTable';
+import { Select, MenuItem, FormControl, InputLabel } from '@mui/material';
 
 const AssignmentSelector = () => {
   const [assignments, setAssignments] = useState([]);
   const [selectedAssignment, setSelectedAssignment] = useState('');
 
   useEffect(() => {
-    axios.get('http://localhost:3001/get-collections')
+    axios.get(`http://${process.env.REACT_APP_SERVER_IP}/get-collections`)
       .then(response => {
         setAssignments(response.data.filter(name => name.startsWith('tests-')).map(name => name.replace('tests-', '')));
       })
@@ -20,14 +21,22 @@ const AssignmentSelector = () => {
 
   return (
     <div>
-      <select onChange={handleSelect} value={selectedAssignment}>
-        <option value="">--Select an Assignment--</option>
-        {assignments.map(assignment => (
-          <option key={assignment} value={assignment}>
-            {assignment}
-          </option>
-        ))}
-      </select>
+      <FormControl>
+        <InputLabel id="assignment-select-label">Assignment</InputLabel>
+        <Select
+          labelId="assignment-select-label"
+          id="assignment-select"
+          value={selectedAssignment}
+          onChange={handleSelect}
+          displayEmpty
+        >
+          {assignments.map(assignment => (
+            <MenuItem key={assignment} value={assignment}>
+              {assignment}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
 
       {selectedAssignment && <TestTable assignment={selectedAssignment} />}
     </div>

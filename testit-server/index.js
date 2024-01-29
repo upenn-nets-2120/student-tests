@@ -1,4 +1,6 @@
 const express = require('express');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const MongoClient = require('mongodb').MongoClient;
 const app = express();
@@ -7,10 +9,11 @@ const port = 3000;
 
 const url = process.env.DB_URL;
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
+const SIGNING_TOKEN = process.env.SIGNING_TOKEN;
 const dbName = 'tests-database';
 let db;
 
-// Auth middleware
+// Auth middleware (only for Administrators/Gradescope)
 const authorize = (req, res, next) => {
   const token = req.headers['authorization'];
 
@@ -21,10 +24,27 @@ const authorize = (req, res, next) => {
   next();
 };
 
+// Middleware that adds a variable indicating authorized or not
 const checkAuth = (req, res, next) => {
   const token = req.headers['authorization'];
   req.isAuthorized = !(!token || token !== AUTH_TOKEN);
   next();
+};
+
+// Middleware that with authenticate users (students) when they're logged in
+const authenticateToken = (req, res, next) => {
+  const token = req.headers['authorization'];
+  if (token == null) {
+    return res.sendStatus(401);
+  }
+
+  jwt.verify(token, SIGNING_TOKEN, (err, user) => {
+    if (err) {
+      return res.sendStatus(403);
+    }
+    req.user = user;
+    next();
+  });
 };
 
 MongoClient.connect(url, { useNewUrlParser: true, useUnifiedTopology: true }, (err, client) => {
@@ -32,10 +52,66 @@ MongoClient.connect(url, { useNewUrlParser: true, useUnifiedTopology: true }, (e
     return console.log(err);
   }
   db = client.db(dbName);
+  db.createCollection('users', (err, res) => {
+    if (err) {
+      console.log(err);
+    } else {
+      console.log("Created users collection");
+    }
+  });
+  const users = db.collection('users');
+  users.createIndex({ username: 1 }, { unique: true }, (err, result) => {
+    if (err) {
+      console.log('Error creating index:', err);
+    } else {
+      console.log('Index created:', result);
+    }
+  });
 
   app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}/`);
   });
+});
+
+app.post('/create-accounts', express.json(), async (req, res) => {
+  const users = db.collection('users');
+  const accounts = req.body;
+
+  if (!Array.isArray(accounts)) {
+    return res.status(400).send('Input should be an array of user accounts');
+  }
+
+  const preparedAccounts = await Promise.all(accounts.map(async account => {
+    const hashedPassword = await bcrypt.hash(account.password, 10);
+    return { username: account.username, password: hashedPassword };
+  }));
+
+  try {
+    await users.insertMany(preparedAccounts, { ordered: false });
+    res.status(201).send('Accounts created, duplicates ignored');
+  } catch (err) {
+    res.status(500).send('Some accounts could not be created due to errors');
+  }
+});
+
+app.post('/login', express.json(), async (req, res) => {
+  if (!req.body) {
+    return res.status(400).send('No credentials provided');
+  }
+  const { username, password } = req.body;
+  const users = db.collection('users');
+  const user = await users.findOne({ username });
+
+  if (user) {
+    if (await bcrypt.compare(password, user.password)) {
+      const token = jwt.sign({ username }, SIGNING_TOKEN, { expiresIn: '1w' });
+      res.json({ token });
+    } else {
+      res.status(400).send('Invalid password');
+    }
+  } else {
+    res.status(400).send('Invalid username');
+  }
 });
 
 app.get('/', (req, res) => {
@@ -53,45 +129,6 @@ app.get('/get-collections', async (req, res) => {
     const filteredCollectionNames = collectionNames.filter(name => !name.startsWith('system.'));
 
     res.status(200).json(filteredCollectionNames);
-  });
-});
-
-app.get('/view-tests/:assignmentName', (req, res) => {
-  const assignmentName = req.params.assignmentName;
-  const collection = db.collection(`tests-${assignmentName}`);
-
-  collection.find({}).toArray((err, items) => {
-    if (err) {
-      res.status(500).send('Error fetching tests from database');
-      return;
-    }
-
-    let html = '<table border="1">';
-    html += '<tr><th>ID</th><th>Name</th><th>Description</th><th>Command</th><th>Response Status</th><th>Response Body</th><th>Author</th><th>Public</th><th>Visibility</th><th>Is Default</th><th>Created At</th><th>Times Ran</th><th>Times Ran Successfully</th><th>Num Students Ran</th><th>Num Students Ran Successfully</th></tr>';
-
-    items.forEach(test => {
-      html += `<tr>`;
-      html += `<td>${test._id}</td>`;
-      html += `<td>${test.name}</td>`;
-      html += `<td>${test.description}</td>`;
-      html += `<td>${test.test.command}</td>`;
-      html += `<td>${test.test.response.status}</td>`;
-      html += `<td>${JSON.stringify(test.test.response.body)}</td>`;
-      html += `<td>${test.author}</td>`;
-      html += `<td>${test.public}</td>`;
-      html += `<td>${test.visibility}</td>`;
-      html += `<td>${test.isDefault}</td>`;
-      html += `<td>${test.createdAt}</td>`;
-      html += `<td>${test.timesRan}</td>`;
-      html += `<td>${test.timesRanSuccessfully}</td>`;
-      html += `<td>${test.numStudentsRan}</td>`;
-      html += `<td>${test.numStudentsRanSuccessfully}</td>`;
-      html += `</tr>`;
-    });
-
-    html += '</table>';
-
-    res.send(html);
   });
 });
 
@@ -307,4 +344,44 @@ app.post('/submit-results/:assignmentName', authorize, express.json(), async (re
 
   result.success = result.failedToUpdate.length === 0;
   res.status(result.success ? 200 : 500).send(result);
+});
+
+// TODO: Remove this eventually
+app.get('/view-tests/:assignmentName', (req, res) => {
+  const assignmentName = req.params.assignmentName;
+  const collection = db.collection(`tests-${assignmentName}`);
+
+  collection.find({}).toArray((err, items) => {
+    if (err) {
+      res.status(500).send('Error fetching tests from database');
+      return;
+    }
+
+    let html = '<table border="1">';
+    html += '<tr><th>ID</th><th>Name</th><th>Description</th><th>Command</th><th>Response Status</th><th>Response Body</th><th>Author</th><th>Public</th><th>Visibility</th><th>Is Default</th><th>Created At</th><th>Times Ran</th><th>Times Ran Successfully</th><th>Num Students Ran</th><th>Num Students Ran Successfully</th></tr>';
+
+    items.forEach(test => {
+      html += `<tr>`;
+      html += `<td>${test._id}</td>`;
+      html += `<td>${test.name}</td>`;
+      html += `<td>${test.description}</td>`;
+      html += `<td>${test.test.command}</td>`;
+      html += `<td>${test.test.response.status}</td>`;
+      html += `<td>${JSON.stringify(test.test.response.body)}</td>`;
+      html += `<td>${test.author}</td>`;
+      html += `<td>${test.public}</td>`;
+      html += `<td>${test.visibility}</td>`;
+      html += `<td>${test.isDefault}</td>`;
+      html += `<td>${test.createdAt}</td>`;
+      html += `<td>${test.timesRan}</td>`;
+      html += `<td>${test.timesRanSuccessfully}</td>`;
+      html += `<td>${test.numStudentsRan}</td>`;
+      html += `<td>${test.numStudentsRanSuccessfully}</td>`;
+      html += `</tr>`;
+    });
+
+    html += '</table>';
+
+    res.send(html);
+  });
 });

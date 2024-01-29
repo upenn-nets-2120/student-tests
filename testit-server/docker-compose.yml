@@ -12,6 +12,7 @@ services:
     environment:
       - DB_URL=mongodb://db:27017/mydb
       - AUTH_TOKEN=${AUTH_TOKEN}
+      - SIGNING_TOKEN=${SIGNING_TOKEN}
 
   db:
     image: mongo
@@ -26,6 +27,8 @@ services:
       - "3000:3000"
     depends_on:
       - app
+    environment:
+      - REACT_APP_SERVER_IP=${SERVER_IP}
 
 volumes:
   mongodb_data:

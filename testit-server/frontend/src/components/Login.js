@@ -1,35 +1,47 @@
-// Login.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Container, Typography, TextField, Button } from '@mui/material';
 
-const Login = ({ onLogin }) => {
+const Login = () => {
+  const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [loggedIn, setLoggedIn] = useState(false);
 
-  const handleLogin = () => {
+  useEffect(() => {
+    if (localStorage.getItem('token')) {
+      navigate('/');
+    }
+  }, [navigate]);
+
+  const handleLogin = async () => {
     if (username && password) {
-      setLoggedIn(true);
-      onLogin(username);
+      try {
+        const response = await fetch(`http://${process.env.REACT_APP_SERVER_IP}/login`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ username, password }),
+        });
+
+        if (!response.ok) {
+          const reason = await response.text();
+          alert(`Login failed: ${reason}`);
+        } else {
+          const data = await response.json();
+          if (data.token) {
+            localStorage.setItem('token', data.token);
+            navigate('/');
+          } else {
+            alert('Login failed!');
+          }
+        }
+      } catch (error) {
+        console.error('Login error:', error);
+      }
     }
   };
-
-  const handleLogout = () => {
-    setLoggedIn(false);
-    onLogin('');
-  };
-
-  if (loggedIn) {
-    return (
-      <Container>
-        <Typography variant="h4">Welcome, {username}!</Typography>
-        <Button variant="contained" color="primary" onClick={handleLogout}>
-          Log Out
-        </Button>
-      </Container>
-    );
-  }
-
+  
   return (
     <Container>
       <Typography variant="h4">Login</Typography>
