@@ -20,8 +20,10 @@ def load_config():
 
 
 def compare_json(json1, json2, any_order):
+  if not any_order:
+    return json1 == json2
   if type(json1) != type(json2):
-      return False
+    return False
   if isinstance(json1, dict):
     if json1.keys() != json2.keys():
       return False

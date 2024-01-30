@@ -173,42 +173,48 @@ const TestTable = ({ account, setAccount, assignment }) => {
   };
 
   const getSortIcon = (field) => {
+    const iconStyle = { width: '1px', display: 'inline-block' };
     if (field !== sortField) {
-      return null;
+      return <div style={iconStyle} />;
     }
-    return sortDirectionAsc ? <ArrowDownwardIcon fontSize="tiny" /> : <ArrowUpwardIcon fontSize="tiny" />;
+    return (
+      <div style={iconStyle}>
+        {sortDirectionAsc ? <ArrowDownwardIcon fontSize="tiny" /> : <ArrowUpwardIcon fontSize="tiny" />}
+      </div>
+    );
   };
 
   return (
     <div>
-      <FormControl>
-        <InputLabel id="filter-select-label">Filter Field</InputLabel>
-        <Select
-          labelId="filter-select-label"
-          value={filterField}
-          onChange={e => setFilterField(e.target.value)}
-        >
-          <MenuItem value="name">Name</MenuItem>
-          <MenuItem value="description">Description</MenuItem>
-          <MenuItem value="type">Type</MenuItem>
-          <MenuItem value="author">Author</MenuItem>
-          <MenuItem value="timesRan">Times Ran</MenuItem>
-          <MenuItem value="timesRanSuccessfully">Times Ran Successfully</MenuItem>
-          <MenuItem value="numStudentsRan"># Students Ran</MenuItem>
-          <MenuItem value="numStudentsRanSuccessfully"># Students Ran Successfully</MenuItem>
-          <MenuItem value="createdAt">Created At</MenuItem>
-          <MenuItem value="numLiked">Likes</MenuItem>
-          <MenuItem value="numDisliked">Dislikes</MenuItem>
-        </Select>
-      </FormControl>
+      <div className="filter-select">
+        <FormControl fullWidth>
+          <InputLabel id="filter-select-label">Filter Field</InputLabel>
+          <Select
+            labelId="filter-select-label"
+            value={filterField}
+            onChange={e => setFilterField(e.target.value)}
+          >
+            <MenuItem value="name">Name</MenuItem>
+            <MenuItem value="description">Description</MenuItem>
+            <MenuItem value="type">Type</MenuItem>
+            <MenuItem value="author">Author</MenuItem>
+            <MenuItem value="timesRan">Times Ran</MenuItem>
+            <MenuItem value="timesRanSuccessfully">Times Ran Successfully</MenuItem>
+            <MenuItem value="numStudentsRan"># Students Ran</MenuItem>
+            <MenuItem value="numStudentsRanSuccessfully"># Students Ran Successfully</MenuItem>
+            <MenuItem value="createdAt">Created At</MenuItem>
+            <MenuItem value="numLiked">Likes</MenuItem>
+            <MenuItem value="numDisliked">Dislikes</MenuItem>
+          </Select>
+        </FormControl>
       <TextField
         label="Filter Value"
         variant="outlined"
-        size="small"
         value={filterValue}
         onChange={e => setFilterValue(e.target.value)}
-        style={{ margin: 8 }}
+        style={{ margin: 10 }}
       />
+      </div>
       <TableContainer component={Paper}>
         <Table aria-label="simple table">
           <TableHead>
@@ -239,7 +245,16 @@ const TestTable = ({ account, setAccount, assignment }) => {
                 <TableCell>{test.timesRanSuccessfully}</TableCell>
                 <TableCell>{test.numStudentsRan}</TableCell>
                 <TableCell>{test.numStudentsRanSuccessfully}</TableCell>
-                <TableCell>{test.createdAt}</TableCell>
+                <TableCell>
+                  {new Date(test.createdAt).toLocaleString('default', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                  }).replace('AM', 'am').replace('PM', 'pm')}
+                </TableCell>
                 <TableCell>{test.numLiked}</TableCell>
                 <TableCell>{test.numDisliked}</TableCell>
                 {account && <TableCell>{getThumbsIcon(test)}</TableCell>}

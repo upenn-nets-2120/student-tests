@@ -9,3 +9,26 @@
   justify-content: space-between;
   align-items: center;
 }
+
+.assignment-selector-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-left: 50px;
+  margin-right: 50px;
+  min-width: 200px;
+}
+
+.assignment-selector-header {
+  margin-top: 20px;
+  width: 200px;
+}
+
+.filter-select {
+  display: flex;
+  align-items: center;
+  margin: 10px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 300px;
+}

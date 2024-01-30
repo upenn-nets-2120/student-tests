@@ -45,7 +45,7 @@ const Login = ({ account, setAccount }) => {
   
   return (
     <Container>
-      <Typography variant="h4">Login</Typography>
+      <Typography variant="h4" style={{margin: '10px'}}>Log In</Typography>
       <TextField
         label="Username"
         variant="outlined"
