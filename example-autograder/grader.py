@@ -31,69 +31,10 @@ def run_curl_command(curl_command):
 
   return result.returncode, result.stdout, result.stderr, response_code, response_body
 
-
-def run_junit_test(junit_path, test_class, classpath):
-  """
-  Runs a JUnit test and captures the result.
-
-  :param junit_path: Path to junit.jar.
-  :param test_class: Fully qualified name of the test class to run.
-  :param classpath: Classpath including the project classes and JUnit.
-  :return: A dictionary with the test results.
-  """
-  # Construct the Java command
-  command = [
-    'java',
-    '-cp',
-    f"{junit_path}:{classpath}", # For Windows, use ';' instead of ':'
-    'org.junit.runner.JUnitCore',
-    test_class
-  ]
-  # java -cp .:/usr/share/java/junit.jar org.junit.runner.JUnitCore [test class name]
-  
-  result = subprocess.run(command, capture_output=True, text=True)
-  
-  output = result.stdout + result.stderr
-  if result.returncode != 0:
-    return {'success': False, 'output': output}
-  return parse_junit_output(output)
-
-def parse_junit_output(output):
-  """
-  Parses the console output from a JUnit test run to extract results.
-
-  :param output: Console output as a string.
-  :return: A dictionary with parsed test results.
-  """
-  test_results = {
-    'success': False,
-    'run': 0,
-    'failures': [],
-    'errors': []
-  }
-
-  # Basic parsing logic - customize as needed based on your output
-  if "FAILURES!!!" in output:
-    test_results['success'] = False
-    failure_matches = re.findall(r"test(.*)\((.*)\)", output)
-    for match in failure_matches:
-      test_results['failures'].append({'test': match[0].strip(), 'class': match[1]})
-  else:
-    test_results['success'] = True
-  
-  run_matches = re.search(r"Tests run: (\d+),", output)
-  if run_matches:
-    test_results['run'] = int(run_matches.group(1))
-  
-  # Errors parsing can be added similarly
-  
-  return test_results
-
-
-def run_test(test):
+def run_curl_test(test):
   curl_command = test['test']['command']
+  response_type = test['test']['response-type']
   expected_status = test['test']['response']['status']
-  expected_body = test['test']['response']['body']
 
   returncode, _, stderr, response_code, response_body = run_curl_command(curl_command)
 
@@ -102,11 +43,28 @@ def run_test(test):
 
   if response_code != expected_status:
     return {"success": False, "reason": f"Test '{test['name']}' failed: Expected status {expected_status}, got {response_code}"}
-
-  if response_body != expected_body:
-    return {"success": False, "reason": f"Test '{test['name']}' failed: Expected body {expected_body}, got {response_body}"}
+  
+  if response_type == "json":
+    try:
+      response_json = json.loads(response_body)
+    except json.JSONDecodeError:
+      return {"success": False, "reason": f"Test '{test['name']}' failed: Response body is not valid JSON"}
+    expected_json = test['test']['response']['json']
+    if response_json != expected_json:
+      return {"success": False, "reason": f"Test '{test['name']}' failed: Expected body {expected_body}, got {response_json}"}
+  elif response_type == "text":
+    expected_body = test['test']['response']['body']
+    if response_body != expected_body:
+      return {"success": False, "reason": f"Test '{test['name']}' failed: Expected body {expected_body}, got {response_body}"}
 
   return {"success": True, "reason": f"Test '{test['name']}' Passed"}
+
+
+def run_test(test):
+  if test["type"] == "curl":
+    return run_curl_test(test)
+  else:
+    return {"success": False, "reason": f"Unknown test type '{test['type']}'"}
 
 
 def run_tests(tests):

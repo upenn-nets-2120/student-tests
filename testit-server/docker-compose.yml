@@ -28,7 +28,7 @@ services:
     depends_on:
       - app
     environment:
-      - REACT_APP_SERVER_IP=${SERVER_IP}
+      - REACT_APP_SERVER_IP=app:3000
 
 volumes:
   mongodb_data:

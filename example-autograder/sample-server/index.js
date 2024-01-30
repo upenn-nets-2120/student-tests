@@ -16,3 +16,18 @@ app.get('/', (req, res) => {
 app.get('/error', (req, res) => {
   res.status(404).send('Not found');
 });
+
+app.get('/json', (req, res) => {
+  const object = {
+    "field-1": "sample field 1",
+    "field-3": [1, 2, 3, 4, 5],
+    "field-4": {
+      "sub-field-2": "sub field 2",
+      "sub-field-1": "sub field 1",
+      "sub-field-3": [1, 2, 3]
+    },
+    "field-2": "sample field 2",
+  }
+
+  res.json(object);
+});
