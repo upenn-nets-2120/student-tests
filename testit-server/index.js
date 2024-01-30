@@ -251,7 +251,19 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
   }
   console.log("Recieving tests from Student ID " + author);
 
-  const numPublicTestsForAccess = req.query.num_public_tests ?? 1
+  const {
+    numPublicTestsForAccess = 1,
+    maxTestsPerStudent = 10,
+    maxNumReturnedTests = 100,
+    weightReturnedTests = false
+  } = req.query;
+
+  const existingTestCount = await collection.countDocuments({ author: author });
+  const remainingTests = maxTestsPerStudent - existingTestCount;
+
+  if (remainingTests <= 0) {
+    return res.status(400).send(`Error: Maximum number of tests per student (${maxTestsPerStudent}) exceeded.`);
+  }
 
   const result = {failedToAdd: []};
   const processedTestCases = [];
@@ -286,8 +298,11 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
         console.log("Test " + testCase.name + " already exists by a different author!");
         result.failedToAdd.push({ "name": testCase.name, "reason": "Test case already exists by a different author!" });
       }
-    } else {
+    } else if (processedTestCases.length < remainingTests) {
       processedTestCases.push(testCase);
+    } else {
+      console.log(`Maximum number of tests per student (${maxTestsPerStudent}) exceeded.`);
+      result.failedToAdd.push({ "name": testCase.name, "reason": `Maximum number of tests per student (${maxTestsPerStudent}) exceeded.` });
     }
   }
 
@@ -302,12 +317,23 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
       { $group: { _id: "$author", count: { $sum: 1 } } }
     ]).toArray();
 
-    if (authorPublicTestCount.length > 0 && authorPublicTestCount[0].count >= numPublicTestsForAccess) {
-      result.tests = await collection.find({ $or: [{ public: true }, { author: author }, { isDefault: true }] }).toArray();
-    } else {
-      result.tests = await collection.find({ isDefault: true }).toArray();
+    let testsQuery = { $or: [{ public: true }, { author: author }, { isDefault: true }] };
+    if (authorPublicTestCount.length === 0 || authorPublicTestCount[0].count < numPublicTestsForAccess) {
+      testsQuery = { isDefault: true };
+    }
+    let tests = await collection.find(testsQuery).toArray();
+
+    if (tests.length > maxNumReturnedTests) {
+      if (weightReturnedTests) { // use weighted sampling by number of likes
+        tests = tests.map(test => ({ ...test, weight: test.studentsLiked.length + 1 }));
+        tests = weightedRandomSample(tests, maxNumReturnedTests); // TODO: make this more efficient?
+        tests = tests.map(({ weight, ...testWithoutWeight }) => testWithoutWeight);
+      } else { // use simple random sampling
+        tests = tests.sort(() => 0.5 - Math.random()).slice(0, maxNumReturnedTests);
+      }
     }
 
+    result.tests = tests;
     res.status(201).send(result);
   } catch (err) {
     result.success = false;
@@ -315,6 +341,28 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
     res.status(500).send(result);
   }
 });
+
+function weightedRandomSample(items, maxItems) {
+  let totalWeight = items.reduce((acc, item) => acc + item.weight, 0);
+  let weightedSamples = [];
+
+  for (let i = 0; i < maxItems && items.length > 0; i++) {
+    let randomWeight = Math.random() * totalWeight;
+    let weightSum = 0;
+
+    for (let j = 0; j < items.length; j++) {
+      weightSum += items[j].weight;
+      if (randomWeight <= weightSum) {
+        weightedSamples.push(items[j]);
+        totalWeight -= items[j].weight;
+        items.splice(j, 1);
+        break;
+      }
+    }
+  }
+
+  return weightedSamples;
+}
 
 app.post('/submit-results/:assignmentName', authorize, express.json(), async (req, res) => {
   const assignmentName = req.params.assignmentName;

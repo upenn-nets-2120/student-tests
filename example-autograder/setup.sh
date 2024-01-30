@@ -11,4 +11,8 @@ npm install
 
 cd /autograder/source
 
+if [ -f .env ]; then
+    export $(cat .env | xargs)
+fi
+
 python3 /autograder/source/grader.py --setup

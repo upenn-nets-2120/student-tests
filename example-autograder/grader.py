@@ -13,11 +13,12 @@ AUTH_TOKEN = os.getenv('AUTH_TOKEN')
 
 
 def load_config():
-  global num_public_tests_for_access
+  global config
   with open('config.json', 'r') as file:
     config = json.load(file)
-    num_public_tests_for_access = config['numPublicTestsForAccess']
-
+    required_config_vars = ['numPublicTestsForAccess', 'maxTestsPerStudent', 'maxNumReturnedTests', 'weightReturnedTests']
+    for var in required_config_vars:
+      assert var in config, f"Missing config variable: '{var}'"
 
 def compare_json(json1, json2, any_order):
   if not any_order:
@@ -120,12 +121,14 @@ def get_student_id():
 
 
 def get_assignment_title():
+  def clean_title(title):
+    safe_title = re.sub(r'\s+', '_', title.lower().strip())
+    return re.sub(r'[^\w-]', '', safe_title)
+  if 'config' in globals() and 'assignmentTitle' in config:
+    return clean_title(config['assignmentTitle'])
   with open('/autograder/submission_metadata.json', 'r') as file:
     metadata = json.load(file)
-    title = metadata['assignment']['title']
-    safe_title = re.sub(r'\s+', '_', title)
-    safe_title = re.sub(r'[^\w-]', '', safe_title)
-    return safe_title
+    return clean_title(metadata['assignment']['title'])
 
 
 def upload_tests(assignment_title, student_id, tests, params):
@@ -206,7 +209,7 @@ def main():
   assignment_title = get_assignment_title()
 
   # Upload tests to the database, get response of all tests
-  response = upload_tests(assignment_title, student_id, successful_tests, {"num_public_tests": num_public_tests_for_access})
+  response = upload_tests(assignment_title, student_id, successful_tests, config)
   json_response = response.json()
   if response.status_code < 200 or response.status_code >= 300 or not json_response['success']:
     write_output({"output": "Error uploading tests to the database. Please contact the assignment administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
@@ -295,7 +298,7 @@ def setup():
   assignment_title = get_assignment_title()
 
   # Upload tests to the database, get response of all tests
-  response = upload_tests(assignment_title, -1, successful_tests, {"num_public_tests": num_public_tests_for_access})
+  response = upload_tests(assignment_title, -1, successful_tests, config)
   json_response = response.json()
   if response.status_code < 200 or response.status_code >= 300 or not json_response['success']:
     print("Error uploading tests to the database. Please contact the database administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str + "\n" + test_response)
