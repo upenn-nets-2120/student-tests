@@ -19,6 +19,20 @@ def load_config():
     num_public_tests_for_access = config['numPublicTestsForAccess']
 
 
+def compare_json(json1, json2, any_order):
+  if type(json1) != type(json2):
+      return False
+  if isinstance(json1, dict):
+    if json1.keys() != json2.keys():
+      return False
+    return all(compare_json(json1[key], json2[key], any_order) for key in json1)
+  if isinstance(json1, list):
+    if any_order:
+      return all(any(compare_json(item1, item2, any_order) for item2 in json2) for item1 in json1) and all(any(compare_json(item2, item1, any_order) for item1 in json1) for item2 in json2)
+    return all(compare_json(item1, item2, any_order) for item1, item2 in zip(json1, json2))
+  return json1 == json2
+
+
 def run_curl_command(curl_command):
   modified_curl_command = curl_command + ' -w "\\n%{http_code}"'
   args = shlex.split(modified_curl_command)
@@ -30,6 +44,7 @@ def run_curl_command(curl_command):
   response_code = int(output_parts[-1])
 
   return result.returncode, result.stdout, result.stderr, response_code, response_body
+
 
 def run_curl_test(test):
   curl_command = test['test']['command']
@@ -50,7 +65,8 @@ def run_curl_test(test):
     except json.JSONDecodeError:
       return {"success": False, "reason": f"Test '{test['name']}' failed: Response body is not valid JSON"}
     expected_json = test['test']['response']['json']
-    if response_json != expected_json:
+    any_order = test['test']['any-order'] if 'any-order' in test['test'] else False
+    if not compare_json(response_json, expected_json, any_order):
       return {"success": False, "reason": f"Test '{test['name']}' failed: Expected body {expected_body}, got {response_json}"}
   elif response_type == "text":
     expected_body = test['test']['response']['body']
