@@ -1,3 +1,5 @@
 {
-  "numPublicTestsForAccess": 1
+  "numPublicTestsForAccess": 1,
+  "pomPath": "sample-java-project/pom.xml",
+  "junitTestLocation": "sample-java-project/src/test/java/nets2120"
 }

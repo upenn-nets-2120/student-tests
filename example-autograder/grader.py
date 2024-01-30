@@ -4,6 +4,8 @@ import requests
 import shlex
 import time, os, sys
 import re
+import base64
+import xml.etree.ElementTree as ET
 
 
 SERVER_IP = os.getenv('SERVER_IP') # EC2 instance IP of database/server
@@ -13,10 +15,13 @@ AUTH_TOKEN = os.getenv('AUTH_TOKEN')
 
 
 def load_config():
-  global num_public_tests_for_access
+  global config
   with open('config.json', 'r') as file:
     config = json.load(file)
-    num_public_tests_for_access = config['numPublicTestsForAccess']
+    assert 'numPublicTestsForAccess' in config, "Missing config variable: 'numPublicTestsForAccess'"
+    # these two can be empty but should still be present in config
+    assert 'junitTestLocation' in config, "Missing config variable: 'junitTestLocation'"
+    assert 'pomPath' in config, "Missing config variable: 'pomPath'" 
 
 
 def run_curl_command(curl_command):
@@ -59,29 +64,75 @@ def run_curl_test(test):
 
   return {"success": True, "reason": f"Test '{test['name']}' Passed"}
 
+def run_junit_tests(test, setup):
+  base = "/autograder/source" if setup else "/autograder/submission"
+  raw_tests = base64.b64decode(test["content"])
+  test_file_path = os.path.join(base, config["junitTestLocation"], f"{test['name']}.java")
+  pom_file_path = os.path.join(base, config["pomPath"])
+  # fix path
+  report_path = os.path.join(base, "sample-java-project", "target/surefire-reports", f"TEST-nets2120.{test['name']}.xml")
+  with open(test_file_path, 'wb') as file:
+    file.write(raw_tests)
+  subprocess.run(["mvn", "test", "-f", pom_file_path])
 
-def run_test(test):
+  if not os.path.exists(report_path):
+    return [{"name": test['name'], "success": False, "reason": "Test report not found"}]
+  
+  tree = ET.parse(report_path)
+  root = tree.getroot()
+  test_results = []
+
+  for testcase in root.iter('testcase'):
+      test_name = testcase.get('name')
+      classname = testcase.get('classname')
+      full_test_name = f"{classname}.{test_name}"
+      error = testcase.find('error')
+      failure = testcase.find('failure')
+      if error is not None or failure is not None:
+          reason = error.text if error is not None else failure.text
+          test_results.append({"name": full_test_name, "success": False, "reason": f"Test '{full_test_name}' Failed: {reason}"})
+      else:
+          test_results.append({"name": full_test_name, "success": True, "reason": f"Test '{full_test_name}' Passed"})
+
+  return test_results
+
+def run_test(test, setup):
   if test["type"] == "curl":
     return run_curl_test(test)
+  elif test["type"] == "junit":
+    return run_junit_tests(test, setup)
   else:
     return {"success": False, "reason": f"Unknown test type '{test['type']}'"}
 
 
-def run_tests(tests):
-  results = {"passed": 0, "failed": 0, "total": len(tests), "results": []}
+def run_tests(tests, setup=False):
+  results = {"passed": 0, "failed": 0, "results": []}
 
   for test in tests:
-    test_result = run_test(test)
-    results["results"].append({
-        "name": test["name"],
-        "result": test_result,
-        "test": test
-    })
-    if test_result["success"]:
-      results["passed"] += 1
-    else:
-      results["failed"] += 1
-      
+    test_result = run_test(test, setup)
+    if test["type"] == "curl":
+      results["results"].append({
+          "name": test["name"],
+          "result": test_result,
+          "test": test
+      })
+      if test_result["success"]:
+        results["passed"] += 1
+      else:
+        results["failed"] += 1
+    elif test["type"] == "junit":
+      for t in test_result:
+        results["results"].append({
+          "name": t["name"],
+          "result": t,
+          "test": test
+        })
+        if t["success"]:
+          results["passed"] += 1
+        else:
+          results["failed"] += 1 
+  
+  results["total"] = len(results["results"])
   return results
 
 
@@ -188,7 +239,7 @@ def main():
   assignment_title = get_assignment_title()
 
   # Upload tests to the database, get response of all tests
-  response = upload_tests(assignment_title, student_id, successful_tests, {"num_public_tests": num_public_tests_for_access})
+  response = upload_tests(assignment_title, student_id, successful_tests, {"num_public_tests": config['numPublicTestsForAccess']})
   json_response = response.json()
   if response.status_code < 200 or response.status_code >= 300 or not json_response['success']:
     write_output({"output": "Error uploading tests to the database. Please contact the assignment administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
@@ -244,7 +295,7 @@ def setup():
   if len(tests) > 0:
     # Run tests on sample server
     sample_server = start_server("/autograder/source/sample-server")
-    sample_results = run_tests(tests)
+    sample_results = run_tests(tests, setup=True)
     stop_server(sample_server)
 
     feedback = [{
@@ -274,10 +325,10 @@ def setup():
   if not check_database_health():
     print("Server is not running or not healthy. Please contact the database administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str + "\n" + test_response)
     return
-  assignment_title = get_assignment_title()
+  assignment_title = "test" # get_assignment_title()
 
   # Upload tests to the database, get response of all tests
-  response = upload_tests(assignment_title, -1, successful_tests, {"num_public_tests": num_public_tests_for_access})
+  response = upload_tests(assignment_title, -1, successful_tests, {"num_public_tests": config['numPublicTestsForAccess']})
   json_response = response.json()
   if response.status_code < 200 or response.status_code >= 300 or not json_response['success']:
     print("Error uploading tests to the database. Please contact the database administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str + "\n" + test_response)
