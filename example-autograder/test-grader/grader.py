@@ -14,11 +14,12 @@ AUTH_TOKEN = os.getenv('AUTH_TOKEN')
 
 def load_config():
   global config
-  with open('config.json', 'r') as file:
+  with open('/autograder/source/test-grader/config.json', 'r') as file:
     config = json.load(file)
     required_config_vars = ['numPublicTestsForAccess', 'maxTestsPerStudent', 'maxNumReturnedTests', 'weightReturnedTests']
     for var in required_config_vars:
       assert var in config, f"Missing config variable: '{var}'"
+
 
 def compare_json(json1, json2, any_order):
   if not any_order:
@@ -145,10 +146,10 @@ def upload_results(assignment_title, student_id, results):
   return response
 
 
-def start_server(server_path, npm_install=False):
-  if npm_install:
-    subprocess.run(["npm", "install"], cwd=server_path)
-  process = subprocess.Popen(["node", "index.js"], cwd=server_path)
+def start_server(server_path, setup=False):
+  if setup:
+    subprocess.run(["bash", "setup-server.sh"], cwd=server_path, check=True)
+  process = subprocess.Popen(["bash", "run-server.sh"], cwd=server_path)
   time.sleep(5)
   return process
 
@@ -170,7 +171,7 @@ def main():
   
   # Read tests
   try:
-    with open('tests.json', 'r') as file:
+    with open('/autograder/submission/tests.json', 'r') as file:
       tests = json.load(file)
   except:
     tests = []
@@ -224,7 +225,7 @@ def main():
   all_tests = response.json()['tests']
 
   # Run tests on student submission
-  student_server = start_server("/autograder/submission", npm_install=True)
+  student_server = start_server("/autograder/submission", setup=True)
   all_results = run_tests(all_tests)
   stop_server(student_server)
   
@@ -256,7 +257,7 @@ def setup():
   
   # Read default tests
   try:
-    with open('default-tests.json', 'r') as file:
+    with open('/autograder/source/sample-server/default-tests.json', 'r') as file:
       tests = json.load(file)
   except:
     tests = []

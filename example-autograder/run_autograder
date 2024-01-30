@@ -1,11 +1,3 @@
 #!/bin/bash
 
-cd /autograder/source
-
-if [ -f .env ]; then
-    export $(cat .env | xargs)
-fi
-
-cd /autograder/submission
-
-python3 /autograder/source/grader.py
+bash /autograder/source/test-grader/run-grader.sh
