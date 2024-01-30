@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TextField, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Button, TextField, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import ThumbDownIcon from '@mui/icons-material/ThumbDown';
 
-const TestTable = ({ assignment }) => {
+// TODO: FIX error results/handling in below network requests
+const TestTable = ({ account, setAccount, assignment }) => {
+  const navigate = useNavigate();
   const [allTests, setAllTests] = useState([]);
   const [displayedTests, setDisplayedTests] = useState([]);
   const [sortField, setSortField] = useState('numLiked');
@@ -16,15 +19,21 @@ const TestTable = ({ assignment }) => {
 
   useEffect(() => {
     axios.get(`http://${process.env.REACT_APP_SERVER_IP}/get-tests/${assignment}`,
-      { headers: { 'Authorization': localStorage.getItem('token') } })
+      { headers: { 'Authorization': account?.token ?? 0 } })
       .then(response => {
         setAllTests(response.data);
       })
       .catch(error => {
         console.error('Error fetching tests:', error);
         setAllTests([]);
+        if (error.response?.status === 403 && error.response.data === 'Token expired') {
+          alert('Token expired. Please log in again.');
+          localStorage.removeItem('user');
+          setAccount(null);
+          navigate('/login');
+        }
       });
-  }, [localStorage.getItem('token'), assignment]);
+  }, [navigate, setAccount, account, assignment]);
 
   useEffect(() => {
     const filteredTests = !filterField || filterValue === '' ? allTests : allTests.filter(test => 
@@ -54,7 +63,7 @@ const TestTable = ({ assignment }) => {
   const like = async (testId) => {
     try {
       const response = await axios.post(`http://${process.env.REACT_APP_SERVER_IP}/like-test/${assignment}/${testId}`,
-        {}, { headers: { 'Authorization': localStorage.getItem('token') } });
+        {}, { headers: { 'Authorization': account?.token } });
       if (response.status === 200) {
         setAllTests(allTests => [...allTests].map(test => {
           if (test._id === testId) {
@@ -65,15 +74,20 @@ const TestTable = ({ assignment }) => {
               userLiked: true,
               userDisliked: false
             };
-            // if ('studentsLiked' in test && 'studentsDisliked' in test) {
-            //   updatedTest.studentsLiked = isAlreadyLiked ? test.studentsLiked : [...test.studentsLiked, 'currentUser'];
-            //   updatedTest.studentsDisliked = test.studentsDisliked.filter(username => username !== 'currentUser');
-            // }
+            if (account && 'studentsLiked' in test && 'studentsDisliked' in test) {
+              updatedTest.studentsLiked = test.userLiked ? test.studentsLiked : [...test.studentsLiked, account.username];
+              updatedTest.studentsDisliked = test.studentsDisliked.filter(username => username !== account.username);
+            }
             return updatedTest;
           }
           return test;
         }));
         setDisplayedTests(displayedTests => [...displayedTests]);
+      } else if (response.status === 403 && response.data === 'Token expired') {
+        alert('Token expired. Please log in again.');
+        localStorage.removeItem('user');
+        setAccount(null);
+        navigate('/login');
       }
     } catch (error) {
       console.error('Error liking the test:', error);
@@ -83,7 +97,7 @@ const TestTable = ({ assignment }) => {
   const dislike = async (testId) => {
     try {
       const response = await axios.post(`http://${process.env.REACT_APP_SERVER_IP}/dislike-test/${assignment}/${testId}`,
-        {}, { headers: { 'Authorization': localStorage.getItem('token') } });
+        {}, { headers: { 'Authorization': account?.token } });
       if (response.status === 200) {
         setAllTests(allTests => [...allTests].map(test => {
           if (test._id === testId) {
@@ -94,20 +108,52 @@ const TestTable = ({ assignment }) => {
               userLiked: false,
               userDisliked: true
             };
-            // if ('studentsLiked' in test && 'studentsDisliked' in test) {
-            //   updatedTest.studentsLiked = test.studentsLiked.filter(username => username !== 'currentUser');
-            //   updatedTest.studentsDisliked = isAlreadyDisliked ? test.studentsDisliked : [...test.studentsDisliked, 'currentUser'];
-            // }
+            if (account && 'studentsLiked' in test && 'studentsDisliked' in test) {
+              updatedTest.studentsLiked = test.studentsLiked.filter(username => username !== account.username);
+              updatedTest.studentsDisliked = test.userDisliked ? test.studentsDisliked : [...test.studentsDisliked, account.username];
+            }
             return updatedTest;
           }
           return test;
         }));
         setDisplayedTests(displayedTests => [...displayedTests]);
+      } else if (response.status === 403 && response.data === 'Token expired') {
+        alert('Token expired. Please log in again.');
+        localStorage.removeItem('user');
+        setAccount(null);
+        navigate('/login');
       }
     } catch (error) {
       console.error('Error disliking the test:', error);
     }
   };
+
+  const deleteTest = async (testId) => {
+    try {
+      const response = await axios.delete(`http://${process.env.REACT_APP_SERVER_IP}/delete-test/${assignment}/${testId}`, 
+        { headers: { 'Authorization': account?.token ?? 0 } });
+      if (response.status === 200) {
+        alert('Test deleted successfully');
+        setAllTests(prevTests => prevTests.filter(test => test._id !== testId));
+      } else {
+        alert('Error deleting test');
+      }
+    } catch (error) {
+      console.error('Error deleting the test:', error);
+      if (error.response?.status === 403 && error.response.data === 'Token expired') {
+        alert('Token expired. Please log in again.');
+        localStorage.removeItem('user');
+        setAccount(null);
+        navigate('/login');
+      } else if (error.response) {
+        // Handle other API errors (like 404 - Test not found, 403 - Not authorized)
+        alert(error.response.data);
+      } else {
+        alert('An error occurred while deleting the test');
+      }
+    }
+  };
+  
 
   const getThumbsIcon = (test) => {
     return (
@@ -153,7 +199,6 @@ const TestTable = ({ assignment }) => {
           <MenuItem value="createdAt">Created At</MenuItem>
           <MenuItem value="numLiked">Likes</MenuItem>
           <MenuItem value="numDisliked">Dislikes</MenuItem>
-          {/* TODO: Add other options */}
         </Select>
       </FormControl>
       <TextField
@@ -179,7 +224,8 @@ const TestTable = ({ assignment }) => {
               <TableCell onClick={() => clickSort('createdAt')}>Created At {getSortIcon('createdAt')}</TableCell>
               <TableCell onClick={() => clickSort('numLiked')}>Likes {getSortIcon('numLiked')}</TableCell>
               <TableCell onClick={() => clickSort('numDisliked')}>Dislikes {getSortIcon('numDisliked')}</TableCell>
-              <TableCell>Reaction</TableCell>
+              {account && <TableCell>Reaction</TableCell>}
+              {account && <TableCell>Delete</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -196,7 +242,22 @@ const TestTable = ({ assignment }) => {
                 <TableCell>{test.createdAt}</TableCell>
                 <TableCell>{test.numLiked}</TableCell>
                 <TableCell>{test.numDisliked}</TableCell>
-                <TableCell>{getThumbsIcon(test)}</TableCell>
+                {account && <TableCell>{getThumbsIcon(test)}</TableCell>}
+                {account &&
+                  <TableCell>
+                    {account.gradescope_id === test.author || account.admin ?
+                      <Button
+                        variant="contained"
+                        color="secondary"
+                        onClick={() => deleteTest(test._id)}
+                      >
+                        Delete
+                      </Button>
+                      :
+                      <></>
+                    }
+                  </TableCell>
+                }
               </TableRow>
             ))}
           </TableBody>

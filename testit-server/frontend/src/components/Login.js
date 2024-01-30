@@ -2,16 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Container, Typography, TextField, Button } from '@mui/material';
 
-const Login = () => {
+const Login = ({ account, setAccount }) => {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
   useEffect(() => {
-    if (localStorage.getItem('token')) {
+    if (account) {
       navigate('/');
     }
-  }, [navigate, localStorage.getItem('token')]);
+  }, [navigate, account]);
 
   const handleLogin = async () => {
     if (username && password) {
@@ -29,8 +29,9 @@ const Login = () => {
           alert(`Login failed: ${reason}`);
         } else {
           const data = await response.json();
-          if (data.token) {
-            localStorage.setItem('token', data.token);
+          if (data?.token) {
+            localStorage.setItem('user', JSON.stringify(data));
+            setAccount(data);
             navigate('/');
           } else {
             alert('Login failed!');

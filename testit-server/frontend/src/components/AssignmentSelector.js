@@ -3,7 +3,7 @@ import axios from 'axios';
 import TestTable from './TestTable';
 import { Select, MenuItem, FormControl, InputLabel } from '@mui/material';
 
-const AssignmentSelector = () => {
+const AssignmentSelector = ({ account, setAccount }) => {
   const [assignments, setAssignments] = useState([]);
   const [selectedAssignment, setSelectedAssignment] = useState('');
 
@@ -38,7 +38,7 @@ const AssignmentSelector = () => {
         </Select>
       </FormControl>
 
-      {selectedAssignment && <TestTable assignment={selectedAssignment} />}
+      {selectedAssignment && <TestTable account={account} setAccount={setAccount} assignment={selectedAssignment} />}
     </div>
   );
 };

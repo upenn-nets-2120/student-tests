@@ -32,13 +32,17 @@ const authenticateToken = (req, res, next) => {
     return res.sendStatus(403);
   }
 
-  jwt.verify(token, SIGNING_TOKEN, (err, user) => {
-    if (err) {
-      return res.sendStatus(403);
-    }
-    req.user = user;
+  if (token == 0) {
     next();
-  });
+  } else {
+    jwt.verify(token, SIGNING_TOKEN, (err, user) => {
+      if (err) {
+        return res.status(403).send('Token expired');
+      }
+      req.user = user;
+      next();
+    });
+  }
 };
 
 MongoClient.connect(url, { useNewUrlParser: true, useUnifiedTopology: true }, (err, client) => {
@@ -83,12 +87,12 @@ app.post('/set-accounts', authorize, express.json(), async (req, res) => {
 
   const preparedAccounts = await Promise.all(accounts.map(async account => {
     const hashedPassword = await bcrypt.hash(account.password, 10);
-    return { username: account.username, password: hashedPassword };
+    return { ...account, password: hashedPassword };
   }));
 
   try {
     await users.insertMany(preparedAccounts, { ordered: false });
-    res.status(201).send('Accounts created, duplicates ignored');
+    res.status(201).send('Accounts created');
   } catch (err) {
     res.status(500).send('Some accounts could not be created due to errors');
   }
@@ -106,7 +110,7 @@ app.post('/login', express.json(), async (req, res) => {
     if (await bcrypt.compare(password, user.password)) {
       const { password, ...userToSign } = user;
       const token = jwt.sign(userToSign, SIGNING_TOKEN, { expiresIn: '1w' });
-      res.json({ token });
+      res.json({ ...userToSign, token });
     } else {
       res.status(400).send('Invalid password');
     }
@@ -139,7 +143,7 @@ app.get('/get-tests/:assignmentName', authenticateToken, (req, res) => {
   const assignmentName = req.params.assignmentName;
   const collection = db.collection(`tests-${assignmentName}`);
 
-  const userIsAdmin = req.user.admin;
+  const userIsAdmin = req.user?.admin ?? false;
 
   collection.find(userIsAdmin ? {} : { public: true }).toArray((err, items) => {
     if (err) {
@@ -151,8 +155,8 @@ app.get('/get-tests/:assignmentName', authenticateToken, (req, res) => {
       ...item,
       numLiked: Array.isArray(item.studentsLiked) ? item.studentsLiked.length : 0,
       numDisliked: Array.isArray(item.studentsDisliked) ? item.studentsDisliked.length : 0,
-      userLiked: Array.isArray(item.studentsLiked) ? item.studentsLiked.includes(req.user.username) : false,
-      userDisliked: Array.isArray(item.studentsDisliked) ? item.studentsDisliked.includes(req.user.username) : false,
+      userLiked: Array.isArray(item.studentsLiked) ? item.studentsLiked.includes(req.user?.username) : false,
+      userDisliked: Array.isArray(item.studentsDisliked) ? item.studentsDisliked.includes(req.user?.username) : false,
     }));
 
     if (!userIsAdmin) {
@@ -362,6 +366,9 @@ app.post('/submit-results/:assignmentName', authorize, express.json(), async (re
 });
 
 app.post('/like-test/:assignmentName/:testId', authenticateToken, async (req, res) => {
+  if (!req.user) {
+    return res.status(403).send('Not authorized to like tests');
+  }
   const { assignmentName, testId } = req.params;
   const student = req.user.username;
 
@@ -378,6 +385,9 @@ app.post('/like-test/:assignmentName/:testId', authenticateToken, async (req, re
 });
 
 app.post('/dislike-test/:assignmentName/:testId', authenticateToken, async (req, res) => {
+  if (!req.user) {
+    return res.status(403).send('Not authorized to dislike tests');
+  }
   const { assignmentName, testId } = req.params;
   const student = req.user.username;
 
@@ -394,6 +404,9 @@ app.post('/dislike-test/:assignmentName/:testId', authenticateToken, async (req,
 });
 
 app.delete('/delete-test/:assignmentName/:testId', authenticateToken, async (req, res) => {
+  if (!req.user) {
+    return res.status(403).send('Not authorized to delete tests');
+  }
   const { assignmentName, testId } = req.params;
   const collection = db.collection(`tests-${assignmentName}`);
 
