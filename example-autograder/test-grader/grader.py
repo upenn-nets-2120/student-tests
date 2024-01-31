@@ -4,6 +4,8 @@ import requests
 import shlex
 import time, os, sys
 import re
+import base64
+import xml.etree.ElementTree as ET
 
 
 SERVER_IP = os.getenv('SERVER_IP') # EC2 instance IP of database/server
@@ -16,7 +18,7 @@ def load_config():
   global config
   with open('/autograder/source/test-grader/config.json', 'r') as file:
     config = json.load(file)
-    required_config_vars = ['numPublicTestsForAccess', 'maxTestsPerStudent', 'maxNumReturnedTests', 'weightReturnedTests']
+    required_config_vars = ['numPublicTestsForAccess', 'maxTestsPerStudent', 'maxNumReturnedTests', 'weightReturnedTests', 'pomPath', 'jUnitTestLocation']
     for var in required_config_vars:
       assert var in config, f"Missing config variable: '{var}'"
 
@@ -80,28 +82,76 @@ def run_curl_test(test):
   return {"success": True, "reason": f"Test '{test['name']}' Passed"}
 
 
-def run_test(test):
+def run_junit_tests(test, setup):
+  base = "/autograder/source" if setup else "/autograder/submission"
+  raw_tests = base64.b64decode(test["content"])
+  test_file_path = os.path.join(base, config["jUnitTestLocation"], f"{test['name']}.java")
+  pom_file_path = os.path.join(base, config["pomPath"])
+  # fix path
+  report_path = os.path.join(base, "sample-server", "target/surefire-reports", f"TEST-nets2120.{test['name']}.xml")
+  with open(test_file_path, 'wb') as file:
+    file.write(raw_tests)
+  subprocess.run(["mvn", "test", "-f", pom_file_path])
+
+  if not os.path.exists(report_path):
+    return [{"name": test['name'], "success": False, "reason": "Test report not found"}]
+
+  tree = ET.parse(report_path)
+  root = tree.getroot()
+  test_results = []
+
+  for testcase in root.iter('testcase'):
+    test_name = testcase.get('name')
+    classname = testcase.get('classname')
+    full_test_name = f"{classname}.{test_name}"
+    error = testcase.find('error')
+    failure = testcase.find('failure')
+    if error is not None or failure is not None:
+      reason = error.text if error is not None else failure.text
+      test_results.append({"name": full_test_name, "success": False, "reason": f"Test '{full_test_name}' Failed: {reason}"})
+    else:
+      test_results.append({"name": full_test_name, "success": True, "reason": f"Test '{full_test_name}' Passed"})
+
+  return test_results
+
+
+def run_test(test, setup):
   if test["type"] == "curl":
     return run_curl_test(test)
+  elif test["type"] == "junit":
+    return run_junit_tests(test, setup)
   else:
     return {"success": False, "reason": f"Unknown test type '{test['type']}'"}
 
 
-def run_tests(tests):
-  results = {"passed": 0, "failed": 0, "total": len(tests), "results": []}
+def run_tests(tests, setup=False):
+  results = {"passed": 0, "failed": 0, "results": []}
 
   for test in tests:
-    test_result = run_test(test)
-    results["results"].append({
+    test_result = run_test(test, setup)
+    if test["type"] == "curl":
+      results["results"].append({
         "name": test["name"],
         "result": test_result,
         "test": test
-    })
-    if test_result["success"]:
-      results["passed"] += 1
-    else:
-      results["failed"] += 1
-      
+      })
+      if test_result["success"]:
+        results["passed"] += 1
+      else:
+        results["failed"] += 1
+    elif test["type"] == "junit":
+      for t in test_result:
+        results["results"].append({
+          "name": t["name"],
+          "result": t,
+          "test": test
+        })
+        if t["success"]:
+          results["passed"] += 1
+        else:
+          results["failed"] += 1 
+
+  results["total"] = len(results["results"])
   return results
 
 
@@ -191,7 +241,12 @@ def main():
       "output": "Description: " + result["test"]["description"] + "\n\n" + result["result"]["reason"] if "description" in result["test"] and result["test"]["description"] else result["result"]["reason"],
       "visibility": "visible"
     } for result in sample_results["results"]]
-    successful_tests = [result["test"] for result in sample_results["results"] if result["result"]["success"]]
+    successful_tests = []
+    successful_test_names = []
+    for result in sample_results["results"]:
+      if result["result"]["success"] and result["test"]["name"] not in successful_test_names:
+        successful_tests.append(result["test"])
+        successful_test_names.append(result["test"]["name"])
 
     if sample_results["total"] != sample_results["passed"]:
       output_str += "Some test cases did not pass sample implementation. If you believe any of these to be a mistake, please contact the assignment administrators. Only test cases that pass this sample may be uploaded. You can find the outcomes of running your tests on THE SAMPLE SOLUTION below.\n"
@@ -266,7 +321,7 @@ def setup():
   if len(tests) > 0:
     # Run tests on sample server
     sample_server = start_server("/autograder/source/sample-server")
-    sample_results = run_tests(tests)
+    sample_results = run_tests(tests, setup=True)
     stop_server(sample_server)
 
     feedback = [{
@@ -276,7 +331,12 @@ def setup():
       "output": "Description: " + result["test"]["description"] + "\n\n" + result["result"]["reason"] if "description" in result["test"] and result["test"]["description"] else result["result"]["reason"],
       "visibility": "visible"
     } for result in sample_results["results"]]
-    successful_tests = [result["test"] for result in sample_results["results"] if result["result"]["success"]]
+    successful_tests = []
+    successful_test_names = []
+    for result in sample_results["results"]:
+      if result["result"]["success"] and result["test"]["name"] not in successful_test_names:
+        successful_tests.append(result["test"])
+        successful_test_names.append(result["test"]["name"])
 
     if sample_results["total"] != sample_results["passed"]:
       output_str += "Some test cases did not pass sample implementation. Only test cases that pass this sample may be uploaded. You can find the outcomes of running your tests on THE SAMPLE SOLUTION below.\n"

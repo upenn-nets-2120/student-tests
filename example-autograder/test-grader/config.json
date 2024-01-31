@@ -3,5 +3,7 @@
   "numPublicTestsForAccess": 1,
   "maxTestsPerStudent": 10,
   "maxNumReturnedTests": 100,
-  "weightReturnedTests": false
+  "weightReturnedTests": false,
+  "pomPath": "sample-java-project/pom.xml",
+  "jUnitTestLocation": "sample-java-project/src/test/java/nets2120"
 }
