@@ -227,7 +227,7 @@ def main():
   output_str = ""
   if len(tests) > 0:
     # Run tests on sample server
-    sample_server = start_server("/autograder/source/sample-server")
+    sample_server = start_server("/autograder/source/sample-java-project")
     sample_results = run_tests(tests)
     stop_server(sample_server)
 
@@ -239,7 +239,12 @@ def main():
       "output": "Description: " + result["test"]["description"] + "\n\n" + result["result"]["reason"] if "description" in result["test"] and result["test"]["description"] else result["result"]["reason"],
       "visibility": "visible"
     } for result in sample_results["results"]]
-    successful_tests = [result["test"] for result in sample_results["results"] if result["result"]["success"]]
+    successful_tests = []
+    successful_test_names = []
+    for result in sample_results["results"]:
+      if result["result"]["success"] and result["test"]["name"] not in successful_test_names:
+        successful_tests.append(result["test"])
+        successful_test_names.append(result["test"]["name"])
 
     if sample_results["total"] != sample_results["passed"]:
       output_str += "Some test cases did not pass sample implementation. If you believe any of these to be a mistake, please contact the assignment administrators. Only test cases that pass this sample may be uploaded. You can find the outcomes of running your tests on THE SAMPLE SOLUTION below.\n"
@@ -324,7 +329,12 @@ def setup():
       "output": "Description: " + result["test"]["description"] + "\n\n" + result["result"]["reason"] if "description" in result["test"] and result["test"]["description"] else result["result"]["reason"],
       "visibility": "visible"
     } for result in sample_results["results"]]
-    successful_tests = [result["test"] for result in sample_results["results"] if result["result"]["success"]]
+    successful_tests = []
+    successful_test_names = []
+    for result in sample_results["results"]:
+      if result["result"]["success"] and result["test"]["name"] not in successful_test_names:
+        successful_tests.append(result["test"])
+        successful_test_names.append(result["test"]["name"])
 
     if sample_results["total"] != sample_results["passed"]:
       output_str += "Some test cases did not pass sample implementation. Only test cases that pass this sample may be uploaded. You can find the outcomes of running your tests on THE SAMPLE SOLUTION below.\n"
