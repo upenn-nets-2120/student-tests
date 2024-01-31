@@ -2,9 +2,9 @@
 
 This framework is for having student created tests that are run against each other.
 
-The `testit-server` directory has a docker container that runs a database and server to store test cases. It should be run separately, and permanently up, probably on some EC2 instance. More instructions in that folder.
+The `testit-server` directory has a docker container that runs a database and server to store test cases. It should be run separately, and permanently up, probably on some EC2 instance. More instructions are in that folder.
 
-The `example-autograder` directory provides an example autograder that uses this student test case framework. More instructions in that folder.
+The `example-autograder` directory provides an example autograder that uses this student test case framework. More instructions are in that folder.
 
 ## How to Use As a Instructor/Administrator
 
@@ -19,8 +19,11 @@ Thank you for using this framework! It is actually really simple to use. It allo
   {
     "name": "Test case 1",
     "description": "optional desc",
+    "type": "curl",
+    "public": true,
     "test": {
       "command": "curl -X GET http://localhost:3000/",
+      "response-type": "text",
       "response": {
         "status": 200,
         "body": "SERVER TEST INCORRECT"
@@ -39,11 +42,17 @@ PLEASE USE HELPFUL NAMES AND DESCRIPTIONS. Please fill both of these fields out 
 
 There are a few other optional fields: the `public` field determines if the test case is public. It defaults to `true`, but if you want to write a test case that only you can access, then set this to false. However, as will be explained later, private tests do not count towards the total you need to see other test cases (see explanation of how tests work below).
 
-The `test` field contains the actual content of the test. Currently, only `curl` commands are supported for this, but more support will be added for other options in the future such as Jest, JUnit, any command with output, any scripts with output, and possibly Playwright. More details on how to use the `curl` test are explained below.
+The `type` field specifies the type of test cases. Currently, only `curl` commands and JUnit 4 tests are supported for this, but more support will be added for other options in the future such as Jest, any command with output, any scripts with output, and possibly Playwright. More details on how to use the these two tests can be found below.
 
-### `curl` Tests:
+The `test` field contains the actual content of the test, depending on the type.
 
-To make a `curl` test, just write the exact `curl` command you would write if you were to test locally. Then, put the expected status code and body into the `response` field in the JSON, and that's it!
+### curl Tests:
+
+To make a curl test (type `curl`), just write the exact `curl` command you would write if you were to test locally in the `command` field. In the `response-type` field, put either `text` or `json` for the expected response type. Then, put the expected status code in the corresponding field, and if the type is `text`, put the expected body in the `body` field. If the type is `json`, put the returned json in the `json` field (as an actual json object, not a string of text). See the `tests.json` file for an example in the `sample-tests` folder. Note that if you use `json` response type, you can specify a flag `any-order` as either true or false. If this is true, then arrays in the json will be accepted as correct even if they appear in a different order.
+
+### JUnit 4 Tests:
+
+To make a JUnit 4 test (type `junit`), ... To be explained ...
 
 ### How the Tests Work
 
@@ -57,10 +66,13 @@ If you don't resubmit `tests.json`, and you have already submitted a public test
 
 If at any points there are any error messages by the autograder, or you believe your test should be passing the sample solution but isn't, please contact the assignment administrators.
 
-### Rating Tests
+Note that each student can submit a maximum of 10 tests, any more will not be accepted. Furthermore, only a random sample of the public tests will actually be run on your submission due to time constraints. Please do not spam the rerun autograder button to try to get different test cases; if you would like to suggest a different system for this, please reach out to the assignment administrators. If you want to edit a test, submitting a test with the same name will completely overwrite it. If you want to delete one, see the section below.
 
-We realize that some test cases may be more thorough than others, and also it's possible that some extraneous tests can slip through the cracks into the pool. Because if this, there is a rating system for the tests. You can check out the associated website given by the administrators, which shows the uploaded public tests for each assignment. After logging in, you can upvote good test cases if they seem to work well, or downvote test cases if you think they are flawed. Furthermore, if you want to delete one of your test cases, you can do so here. Note that there is a limit of 10 tests max per student, so you must delete some tests if you want to upload a different one past this limit. THIS WEBSITE HAS NOT BEEN IMPLEMENTED YET, BUT IT WILL BE.
+### Rating and Deleting Tests
 
+We realize that some test cases may be more thorough than others, and also it's possible that some extraneous tests can slip through the cracks into the pool. Because if this, there is a rating system for the tests. You can check out the associated website given by the administrators, which shows the uploaded public tests for each assignment. Accounts have already been made for the students, and the username is your Pennkey and your password is your PennID. If for some reason your account doesn't work, please reach out to the assignment administrators.
+
+After logging in, you can upvote good test cases if they seem to work well, or downvote test cases if you think they are flawed. Furthermore, if you want to delete one of your test cases, you can do so here. Note that there is a limit of 10 tests max per student, so you must delete some tests if you want to upload a different one past this limit.
 
 ### Test Case Grades
 
