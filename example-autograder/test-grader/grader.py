@@ -168,7 +168,7 @@ def check_database_health():
 def get_student_id():
   with open('/autograder/submission_metadata.json', 'r') as file:
     metadata = json.load(file)
-    return metadata['users'][0]['id']
+    return metadata['users'][0]['email']
 
 
 def get_assignment_title():
@@ -183,14 +183,16 @@ def get_assignment_title():
 
 
 def upload_tests(assignment_title, student_id, tests, params):
-  url = f"{SERVER_URI}/submit-tests/{assignment_title}?student_id={student_id}"
+  encoded_id = base64.b64encode(student_id.encode('utf-8')).decode('utf-8') # just not in plaintext, but isn't sensitive anyway
+  url = f"{SERVER_URI}/submit-tests/{assignment_title}?id={encoded_id}"
   headers = {'Content-Type': 'application/json', 'Authorization': AUTH_TOKEN}
   response = requests.post(url, params=params, json=tests, headers=headers)
   return response
 
 
 def upload_results(assignment_title, student_id, results):
-  url = f"{SERVER_URI}/submit-results/{assignment_title}?student_id={student_id}"
+  encoded_id = base64.b64encode(student_id.encode('utf-8')).decode('utf-8') # just not in plaintext, but isn't sensitive anyway
+  url = f"{SERVER_URI}/submit-results/{assignment_title}?id={encoded_id}"
   headers = {'Content-Type': 'application/json', 'Authorization': AUTH_TOKEN}
   response = requests.post(url, json=results, headers=headers)
   return response
@@ -359,7 +361,7 @@ def setup():
   assignment_title = get_assignment_title()
 
   # Upload tests to the database, get response of all tests
-  response = upload_tests(assignment_title, -1, successful_tests, config)
+  response = upload_tests(assignment_title, "-1", successful_tests, config)
   json_response = response.json()
   if response.status_code < 200 or response.status_code >= 300 or not json_response['success']:
     print("Error uploading tests to the database. Please contact the database administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str + "\n" + test_response)

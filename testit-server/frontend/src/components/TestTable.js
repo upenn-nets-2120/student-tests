@@ -63,7 +63,7 @@ const TestTable = ({ account, setAccount, assignment }) => {
   const like = async (testId) => {
     try {
       const response = await axios.post(`http://${process.env.REACT_APP_SERVER_IP}/like-test/${assignment}/${testId}`,
-        {}, { headers: { 'Authorization': account?.token } });
+        {}, { headers: { 'Authorization': account?.token ?? 0 } });
       if (response.status === 200) {
         setAllTests(allTests => [...allTests].map(test => {
           if (test._id === testId) {
@@ -97,7 +97,7 @@ const TestTable = ({ account, setAccount, assignment }) => {
   const dislike = async (testId) => {
     try {
       const response = await axios.post(`http://${process.env.REACT_APP_SERVER_IP}/dislike-test/${assignment}/${testId}`,
-        {}, { headers: { 'Authorization': account?.token } });
+        {}, { headers: { 'Authorization': account?.token ?? 0 } });
       if (response.status === 200) {
         setAllTests(allTests => [...allTests].map(test => {
           if (test._id === testId) {

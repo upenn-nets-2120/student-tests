@@ -155,8 +155,8 @@ app.get('/get-tests/:assignmentName', authenticateToken, (req, res) => {
       ...item,
       numLiked: Array.isArray(item.studentsLiked) ? item.studentsLiked.length : 0,
       numDisliked: Array.isArray(item.studentsDisliked) ? item.studentsDisliked.length : 0,
-      userLiked: Array.isArray(item.studentsLiked) ? item.studentsLiked.includes(req.user?.username) : false,
-      userDisliked: Array.isArray(item.studentsDisliked) ? item.studentsDisliked.includes(req.user?.username) : false,
+      userLiked: req.user && Array.isArray(item.studentsLiked) ? item.studentsLiked.includes(req.user.username) : false,
+      userDisliked: req.user && Array.isArray(item.studentsDisliked) ? item.studentsDisliked.includes(req.user.username) : false,
     }));
 
     if (!userIsAdmin) {
@@ -245,11 +245,19 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
 
   let testCases = req.body;
 
-  const author = req.query.student_id;
-  if (!author) {
+  if (!req.query.id) {
     return res.status(400).send('Error: Author is required as a query parameter.');
   }
-  console.log("Recieving tests from Student ID " + author);
+
+  let decoded_id = atob(req.query.id);
+  console.log("Recieving tests from encoded id " + req.query.id + " which decodes to " + decoded_id);
+  let user = await db.collection('users').findOne({ id: decoded_id });
+  if (!user) {
+    return res.status(400).send('Error: User not found');
+  }
+
+  const author = user.username;
+  console.log("Author is " + author);
 
   const {
     numPublicTestsForAccess = 1,
@@ -370,11 +378,19 @@ app.post('/submit-results/:assignmentName', authorize, express.json(), async (re
 
   let data = req.body;
 
-  const author = req.query.student_id;
-  if (!author) {
+  if (!req.query.id) {
     return res.status(400).send('Error: Author is required as a query parameter.');
   }
-  console.log("Recieving results from Student ID " + author);
+
+  let decoded_id = atob(req.query.is);
+  console.log("Recieving results from encoded id " + req.query.id + " which decodes to " + decoded_id);
+  let user = await db.collection('users').findOne({ id: decoded_id });
+  if (!user) {
+    return res.status(400).send('Error: User not found');
+  }
+
+  const author = user.username;
+  console.log("Author is " + author);
 
   const result = { failedToUpdate: [] };
   for (const testResult of data) {
@@ -464,7 +480,7 @@ app.delete('/delete-test/:assignmentName/:testId', authenticateToken, async (req
   }
 
   const userIsAdmin = req.user.admin;
-  const userIsAuthor = req.user.gradescope_id === testCase.author;
+  const userIsAuthor = req.user.username === testCase.author;
 
   if (!userIsAdmin && !userIsAuthor) {
     return res.status(403).send('Not authorized to delete this test');
