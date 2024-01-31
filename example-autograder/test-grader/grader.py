@@ -81,13 +81,14 @@ def run_curl_test(test):
 
   return {"success": True, "reason": f"Test '{test['name']}' Passed"}
 
+
 def run_junit_tests(test, setup):
   base = "/autograder/source" if setup else "/autograder/submission"
   raw_tests = base64.b64decode(test["content"])
   test_file_path = os.path.join(base, config["jUnitTestLocation"], f"{test['name']}.java")
   pom_file_path = os.path.join(base, config["pomPath"])
   # fix path
-  report_path = os.path.join(base, "sample-java-project", "target/surefire-reports", f"TEST-nets2120.{test['name']}.xml")
+  report_path = os.path.join(base, "sample-server", "target/surefire-reports", f"TEST-nets2120.{test['name']}.xml")
   with open(test_file_path, 'wb') as file:
     file.write(raw_tests)
   subprocess.run(["mvn", "test", "-f", pom_file_path])
@@ -112,6 +113,7 @@ def run_junit_tests(test, setup):
       test_results.append({"name": full_test_name, "success": True, "reason": f"Test '{full_test_name}' Passed"})
 
   return test_results
+
 
 def run_test(test, setup):
   if test["type"] == "curl":
@@ -227,7 +229,7 @@ def main():
   output_str = ""
   if len(tests) > 0:
     # Run tests on sample server
-    sample_server = start_server("/autograder/source/sample-java-project")
+    sample_server = start_server("/autograder/source/sample-server")
     sample_results = run_tests(tests)
     stop_server(sample_server)
 
@@ -310,7 +312,7 @@ def setup():
   
   # Read default tests
   try:
-    with open('/autograder/source/sample-java-project/default-tests.json', 'r') as file:
+    with open('/autograder/source/sample-server/default-tests.json', 'r') as file:
       tests = json.load(file)
   except:
     tests = []
@@ -318,7 +320,7 @@ def setup():
   output_str = ""
   if len(tests) > 0:
     # Run tests on sample server
-    sample_server = start_server("/autograder/source/sample-java-project")
+    sample_server = start_server("/autograder/source/sample-server")
     sample_results = run_tests(tests, setup=True)
     stop_server(sample_server)
 
