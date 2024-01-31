@@ -249,7 +249,7 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
     return res.status(400).send('Error: Author is required as a query parameter.');
   }
 
-  let decoded_id = atob(req.query.id);
+  let decoded_id = Buffer.from(req.query.id, 'base64').toString('ascii');
   console.log("Recieving tests from encoded id " + req.query.id + " which decodes to " + decoded_id);
   let user = await db.collection('users').findOne({ id: decoded_id });
   if (!user) {
