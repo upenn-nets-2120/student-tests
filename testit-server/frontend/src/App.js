@@ -22,10 +22,10 @@ const StyledButton = styled(Button)({
 const Root = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [account, setAccount] = useState(JSON.parse(localStorage.getItem('user')));
+  const [account, setAccount] = useState(JSON.parse(sessionStorage.getItem('user')));
 
   const handleLogout = () => {
-    localStorage.removeItem('user');
+    sessionStorage.removeItem('user');
     setAccount(null);
   }
 

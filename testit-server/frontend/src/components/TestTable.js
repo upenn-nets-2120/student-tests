@@ -28,7 +28,7 @@ const TestTable = ({ account, setAccount, assignment }) => {
         setAllTests([]);
         if (error.response?.status === 403 && error.response.data === 'Token expired') {
           alert('Token expired. Please log in again.');
-          localStorage.removeItem('user');
+          sessionStorage.removeItem('user');
           setAccount(null);
           navigate('/login');
         }
@@ -85,7 +85,7 @@ const TestTable = ({ account, setAccount, assignment }) => {
         setDisplayedTests(displayedTests => [...displayedTests]);
       } else if (response.status === 403 && response.data === 'Token expired') {
         alert('Token expired. Please log in again.');
-        localStorage.removeItem('user');
+        sessionStorage.removeItem('user');
         setAccount(null);
         navigate('/login');
       }
@@ -119,7 +119,7 @@ const TestTable = ({ account, setAccount, assignment }) => {
         setDisplayedTests(displayedTests => [...displayedTests]);
       } else if (response.status === 403 && response.data === 'Token expired') {
         alert('Token expired. Please log in again.');
-        localStorage.removeItem('user');
+        sessionStorage.removeItem('user');
         setAccount(null);
         navigate('/login');
       }
@@ -142,7 +142,7 @@ const TestTable = ({ account, setAccount, assignment }) => {
       console.error('Error deleting the test:', error);
       if (error.response?.status === 403 && error.response.data === 'Token expired') {
         alert('Token expired. Please log in again.');
-        localStorage.removeItem('user');
+        sessionStorage.removeItem('user');
         setAccount(null);
         navigate('/login');
       } else if (error.response) {

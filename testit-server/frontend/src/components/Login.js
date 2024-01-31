@@ -30,7 +30,7 @@ const Login = ({ account, setAccount }) => {
         } else {
           const data = await response.json();
           if (data?.token) {
-            localStorage.setItem('user', JSON.stringify(data));
+            sessionStorage.setItem('user', JSON.stringify(data));
             setAccount(data);
             navigate('/');
           } else {
