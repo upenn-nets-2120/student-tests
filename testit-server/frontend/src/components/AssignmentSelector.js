@@ -1,19 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import TestTable from './TestTable';
 import { Select, MenuItem, FormControl, InputLabel } from '@mui/material';
 
 const AssignmentSelector = ({ account, setAccount }) => {
+  const navigate = useNavigate();
   const [assignments, setAssignments] = useState([]);
   const [selectedAssignment, setSelectedAssignment] = useState('');
+  const selectedAssignmentRef = useRef(selectedAssignment);
 
   useEffect(() => {
-    axios.get(`http://${process.env.REACT_APP_SERVER_IP}/get-collections`)
+    selectedAssignmentRef.current = selectedAssignment;
+  }, [selectedAssignment]);
+
+  useEffect(() => {
+    axios.get(`http://${process.env.REACT_APP_SERVER_IP}/get-collections`,
+      { headers: { 'Authorization': account?.token ?? 0 } })
       .then(response => {
-        setAssignments(response.data.filter(name => name.startsWith('tests-')).map(name => name.replace('tests-', '')));
+        let newAssignments = response.data.filter(name => name.startsWith('tests-')).map(name => name.replace('tests-', ''));
+        if (!newAssignments.includes(selectedAssignmentRef.current)) {
+          setSelectedAssignment('');
+        }
+        setAssignments(newAssignments);
       })
-      .catch(error => console.error('Error fetching assignments:', error));
-  }, []);
+      .catch(error => {
+        console.error('Error fetching assignments:', error)
+        setAssignments([]);
+        setSelectedAssignment('');
+        if (error.response?.status === 403 && error.response.data === 'Token expired') {
+          alert('Token expired. Please log in again.');
+          sessionStorage.removeItem('user');
+          setAccount(null);
+          navigate('/login');
+        }
+      });
+  }, [navigate, setAccount, account]);
 
   const handleSelect = (event) => {
     setSelectedAssignment(event.target.value);

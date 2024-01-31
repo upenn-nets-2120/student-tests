@@ -123,7 +123,8 @@ app.get('/', (req, res) => {
   res.status(200).send('ok');
 });
 
-app.get('/get-collections', async (req, res) => {
+app.get('/get-collections', authenticateToken, async (req, res) => {
+  let admin = req.user?.admin ?? false;
   db.listCollections().toArray((err, collections) => {
     if (err) {
       console.error('Error listing collections:', err);
@@ -131,7 +132,7 @@ app.get('/get-collections', async (req, res) => {
     }
 
     const collectionNames = collections.map(collection => collection.name);
-    const filteredCollectionNames = collectionNames.filter(name => !name.startsWith('system.'));
+    const filteredCollectionNames = collectionNames.filter(name => !name.startsWith('system.') && (admin || !name.endsWith('hidden')));
 
     res.status(200).json(filteredCollectionNames);
   });
