@@ -20,24 +20,26 @@ const AssignmentSelector = ({ account, setAccount }) => {
   };
 
   return (
-    <div>
-      <FormControl>
-        <InputLabel id="assignment-select-label">Assignment</InputLabel>
-        <Select
-          labelId="assignment-select-label"
-          id="assignment-select"
-          value={selectedAssignment}
-          onChange={handleSelect}
-          displayEmpty
-        >
-          {assignments.map(assignment => (
-            <MenuItem key={assignment} value={assignment}>
-              {assignment}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-
+    <div className="assignment-selector-form">
+      <div className="assignment-selector-header">
+        <FormControl fullWidth>
+          <InputLabel id="assignment-select-label">Assignment</InputLabel>
+          <Select
+            labelId="assignment-select-label"
+            id="assignment-select"
+            value={selectedAssignment}
+            onChange={handleSelect}
+            label="Assignment"
+          >
+            {assignments.map(assignment => (
+              <MenuItem key={assignment} value={assignment}>
+                {assignment}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </div>
+      
       {selectedAssignment && <TestTable account={account} setAccount={setAccount} assignment={selectedAssignment} />}
     </div>
   );

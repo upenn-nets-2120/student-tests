@@ -1,0 +1,8 @@
+[
+  {
+    "name": "AppTest",
+    "type": "junit",
+    "public": false,
+    "content": "cGFja2FnZSBuZXRzMjEyMDsKaW1wb3J0IG9yZy5qdW5pdC5UZXN0OwppbXBvcnQgc3RhdGljIG9yZy5qdW5pdC5Bc3NlcnQuKjsKCnB1YmxpYyBjbGFzcyBBcHBUZXN0IHsKICAgIEBUZXN0CiAgICBwdWJsaWMgdm9pZCB0ZXN0UGFzc2luZygpIHsKICAgICAgICBhc3NlcnRUcnVlKHRydWUpOwogICAgfQoKICAgIEBUZXN0CiAgICBwdWJsaWMgdm9pZCB0ZXN0UGFzc2luZzIoKSB7CiAgICAgICAgYXNzZXJ0RXF1YWxzKDEsIDEpOwogICAgfQp9Cg=="
+  }
+]

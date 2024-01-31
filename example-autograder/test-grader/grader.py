@@ -16,12 +16,27 @@ AUTH_TOKEN = os.getenv('AUTH_TOKEN')
 
 def load_config():
   global config
-  with open('config.json', 'r') as file:
+  with open('/autograder/source/test-grader/config.json', 'r') as file:
     config = json.load(file)
-    assert 'numPublicTestsForAccess' in config, "Missing config variable: 'numPublicTestsForAccess'"
-    # these two can be empty but should still be present in config
-    assert 'junitTestLocation' in config, "Missing config variable: 'junitTestLocation'"
-    assert 'pomPath' in config, "Missing config variable: 'pomPath'" 
+    required_config_vars = ['numPublicTestsForAccess', 'maxTestsPerStudent', 'maxNumReturnedTests', 'weightReturnedTests', 'pomPath', 'jUnitTestLocation']
+    for var in required_config_vars:
+      assert var in config, f"Missing config variable: '{var}'"
+
+
+def compare_json(json1, json2, any_order):
+  if not any_order:
+    return json1 == json2
+  if type(json1) != type(json2):
+    return False
+  if isinstance(json1, dict):
+    if json1.keys() != json2.keys():
+      return False
+    return all(compare_json(json1[key], json2[key], any_order) for key in json1)
+  if isinstance(json1, list):
+    if any_order:
+      return all(any(compare_json(item1, item2, any_order) for item2 in json2) for item1 in json1) and all(any(compare_json(item2, item1, any_order) for item1 in json1) for item2 in json2)
+    return all(compare_json(item1, item2, any_order) for item1, item2 in zip(json1, json2))
+  return json1 == json2
 
 
 def run_curl_command(curl_command):
@@ -35,6 +50,7 @@ def run_curl_command(curl_command):
   response_code = int(output_parts[-1])
 
   return result.returncode, result.stdout, result.stderr, response_code, response_body
+
 
 def run_curl_test(test):
   curl_command = test['test']['command']
@@ -55,7 +71,8 @@ def run_curl_test(test):
     except json.JSONDecodeError:
       return {"success": False, "reason": f"Test '{test['name']}' failed: Response body is not valid JSON"}
     expected_json = test['test']['response']['json']
-    if response_json != expected_json:
+    any_order = test['test']['any-order'] if 'any-order' in test['test'] else False
+    if not compare_json(response_json, expected_json, any_order):
       return {"success": False, "reason": f"Test '{test['name']}' failed: Expected body {expected_body}, got {response_json}"}
   elif response_type == "text":
     expected_body = test['test']['response']['body']
@@ -67,7 +84,7 @@ def run_curl_test(test):
 def run_junit_tests(test, setup):
   base = "/autograder/source" if setup else "/autograder/submission"
   raw_tests = base64.b64decode(test["content"])
-  test_file_path = os.path.join(base, config["junitTestLocation"], f"{test['name']}.java")
+  test_file_path = os.path.join(base, config["jUnitTestLocation"], f"{test['name']}.java")
   pom_file_path = os.path.join(base, config["pomPath"])
   # fix path
   report_path = os.path.join(base, "sample-java-project", "target/surefire-reports", f"TEST-nets2120.{test['name']}.xml")
@@ -77,22 +94,22 @@ def run_junit_tests(test, setup):
 
   if not os.path.exists(report_path):
     return [{"name": test['name'], "success": False, "reason": "Test report not found"}]
-  
+
   tree = ET.parse(report_path)
   root = tree.getroot()
   test_results = []
 
   for testcase in root.iter('testcase'):
-      test_name = testcase.get('name')
-      classname = testcase.get('classname')
-      full_test_name = f"{classname}.{test_name}"
-      error = testcase.find('error')
-      failure = testcase.find('failure')
-      if error is not None or failure is not None:
-          reason = error.text if error is not None else failure.text
-          test_results.append({"name": full_test_name, "success": False, "reason": f"Test '{full_test_name}' Failed: {reason}"})
-      else:
-          test_results.append({"name": full_test_name, "success": True, "reason": f"Test '{full_test_name}' Passed"})
+    test_name = testcase.get('name')
+    classname = testcase.get('classname')
+    full_test_name = f"{classname}.{test_name}"
+    error = testcase.find('error')
+    failure = testcase.find('failure')
+    if error is not None or failure is not None:
+      reason = error.text if error is not None else failure.text
+      test_results.append({"name": full_test_name, "success": False, "reason": f"Test '{full_test_name}' Failed: {reason}"})
+    else:
+      test_results.append({"name": full_test_name, "success": True, "reason": f"Test '{full_test_name}' Passed"})
 
   return test_results
 
@@ -112,9 +129,9 @@ def run_tests(tests, setup=False):
     test_result = run_test(test, setup)
     if test["type"] == "curl":
       results["results"].append({
-          "name": test["name"],
-          "result": test_result,
-          "test": test
+        "name": test["name"],
+        "result": test_result,
+        "test": test
       })
       if test_result["success"]:
         results["passed"] += 1
@@ -131,7 +148,7 @@ def run_tests(tests, setup=False):
           results["passed"] += 1
         else:
           results["failed"] += 1 
-  
+
   results["total"] = len(results["results"])
   return results
 
@@ -153,12 +170,14 @@ def get_student_id():
 
 
 def get_assignment_title():
+  def clean_title(title):
+    safe_title = re.sub(r'\s+', '_', title.lower().strip())
+    return re.sub(r'[^\w-]', '', safe_title)
+  if 'config' in globals() and 'assignmentTitle' in config:
+    return clean_title(config['assignmentTitle'])
   with open('/autograder/submission_metadata.json', 'r') as file:
     metadata = json.load(file)
-    title = metadata['assignment']['title']
-    safe_title = re.sub(r'\s+', '_', title)
-    safe_title = re.sub(r'[^\w-]', '', safe_title)
-    return safe_title
+    return clean_title(metadata['assignment']['title'])
 
 
 def upload_tests(assignment_title, student_id, tests, params):
@@ -175,10 +194,10 @@ def upload_results(assignment_title, student_id, results):
   return response
 
 
-def start_server(server_path, npm_install=False):
-  if npm_install:
-    subprocess.run(["npm", "install"], cwd=server_path)
-  process = subprocess.Popen(["node", "index.js"], cwd=server_path)
+def start_server(server_path, setup=False):
+  if setup:
+    subprocess.run(["bash", "setup-server.sh"], cwd=server_path, check=True)
+  process = subprocess.Popen(["bash", "run-server.sh"], cwd=server_path)
   time.sleep(5)
   return process
 
@@ -200,7 +219,7 @@ def main():
   
   # Read tests
   try:
-    with open('tests.json', 'r') as file:
+    with open('/autograder/submission/tests.json', 'r') as file:
       tests = json.load(file)
   except:
     tests = []
@@ -239,7 +258,7 @@ def main():
   assignment_title = get_assignment_title()
 
   # Upload tests to the database, get response of all tests
-  response = upload_tests(assignment_title, student_id, successful_tests, {"num_public_tests": config['numPublicTestsForAccess']})
+  response = upload_tests(assignment_title, student_id, successful_tests, config)
   json_response = response.json()
   if response.status_code < 200 or response.status_code >= 300 or not json_response['success']:
     write_output({"output": "Error uploading tests to the database. Please contact the assignment administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
@@ -254,7 +273,7 @@ def main():
   all_tests = response.json()['tests']
 
   # Run tests on student submission
-  student_server = start_server("/autograder/submission", npm_install=True)
+  student_server = start_server("/autograder/submission", setup=True)
   all_results = run_tests(all_tests)
   stop_server(student_server)
   
@@ -286,7 +305,7 @@ def setup():
   
   # Read default tests
   try:
-    with open('default-tests.json', 'r') as file:
+    with open('/autograder/source/sample-java-project/default-tests.json', 'r') as file:
       tests = json.load(file)
   except:
     tests = []
@@ -294,7 +313,7 @@ def setup():
   output_str = ""
   if len(tests) > 0:
     # Run tests on sample server
-    sample_server = start_server("/autograder/source/sample-server")
+    sample_server = start_server("/autograder/source/sample-java-project")
     sample_results = run_tests(tests, setup=True)
     stop_server(sample_server)
 
@@ -325,10 +344,10 @@ def setup():
   if not check_database_health():
     print("Server is not running or not healthy. Please contact the database administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str + "\n" + test_response)
     return
-  assignment_title = "test" # get_assignment_title()
+  assignment_title = get_assignment_title()
 
   # Upload tests to the database, get response of all tests
-  response = upload_tests(assignment_title, -1, successful_tests, {"num_public_tests": config['numPublicTestsForAccess']})
+  response = upload_tests(assignment_title, -1, successful_tests, config)
   json_response = response.json()
   if response.status_code < 200 or response.status_code >= 300 or not json_response['success']:
     print("Error uploading tests to the database. Please contact the database administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str + "\n" + test_response)
