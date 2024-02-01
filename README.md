@@ -18,15 +18,37 @@ Thank you for using this framework! It is actually really simple to use. It allo
 [
   {
     "name": "Test case 1",
-    "description": "optional desc",
+    "description": "Optional desciption",
     "type": "curl",
-    "public": true,
     "test": {
       "command": "curl -X GET http://localhost:3000/",
       "response-type": "text",
       "response": {
         "status": 200,
-        "body": "SERVER TEST INCORRECT"
+        "body": "Hello world!"
+      }
+    }
+  },
+  {
+    "name": "Test case 2",
+    "type": "curl",
+    "public": true,
+    "test": {
+      "command": "curl -X GET http://localhost:3000/json",
+      "response-type": "json",
+      "any-order": false,
+      "response": {
+        "status": 200,
+        "json": {
+          "field-1": "sample field 1",
+          "field-2": "sample field 2",
+          "field-3": [1, 2, 5, 3, 4],
+          "field-4": {
+            "sub-field-1": "sub field 1",
+            "sub-field-2": "sub field 2",
+            "sub-field-3": [1, 2, 3]
+          }
+        }
       }
     }
   },
