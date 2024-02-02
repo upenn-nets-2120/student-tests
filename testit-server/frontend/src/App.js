@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import AssignmentSelector from './components/AssignmentSelector';
 import Login from './components/Login';
@@ -29,10 +29,17 @@ const Root = () => {
     setAccount(null);
   }
 
+  useEffect(() => {
+    const allowedPaths = ['/', '/login'];
+    if (!allowedPaths.includes(location.pathname)) {
+      navigate('/');
+    }
+  }, [location, navigate]);
+
   return (
     <div className="App">
       <div className="App-banner">
-        <h1>Student Test Cases</h1>
+        <h1>Student Test Framework</h1>
         <StyledButton onClick={() => account ? handleLogout() : (location.pathname === '/login' ? navigate('/') : navigate('/login'))}>
           {account ? 'Log Out' : (location.pathname === '/login' ? 'Home' : 'Log In')}
         </StyledButton>
