@@ -71,18 +71,22 @@ MongoClient.connect(url, { useNewUrlParser: true, useUnifiedTopology: true }, (e
   });
 });
 
-app.post('/set-accounts', authorize, express.json(), async (req, res) => {
+app.post('/create-accounts', authorize, express.json(), async (req, res) => {
   const users = db.collection('users');
   const accounts = req.body;
+
+  const resetAccounts = req.query.reset === 'true'
 
   if (!Array.isArray(accounts)) {
     return res.status(400).send('Input should be an array of user accounts');
   }
 
-  try {
-    await users.deleteMany({});
-  } catch (err) {
-    return res.status(500).send('Failed to delete existing accounts');
+  if (resetAccounts) {
+    try {
+      await users.deleteMany({});
+    } catch (err) {
+      return res.status(500).send('Failed to delete existing accounts');
+    }
   }
 
   const preparedAccounts = await Promise.all(accounts.map(async account => {
