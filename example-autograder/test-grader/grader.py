@@ -73,7 +73,7 @@ def run_curl_test(test):
     expected_json = test['test']['response']['json']
     any_order = test['test']['any-order'] if 'any-order' in test['test'] else False
     if not compare_json(response_json, expected_json, any_order):
-      return {"success": False, "reason": f"Test '{test['name']}' failed: Expected body {expected_body}, got {response_json}"}
+      return {"success": False, "reason": f"Test '{test['name']}' failed: Expected body {expected_json}, got {response_json}"}
   elif response_type == "text":
     expected_body = test['test']['response']['body']
     if response_body != expected_body:
@@ -238,7 +238,7 @@ def main():
     # Format feedback and ensure they passed sample
     feedback = [{
       "name": "SAMPLE SOLUTION RESULT: " + result["name"],
-      "status": "failed" if not result["result"]["success"] else "passed",
+      "status": "Failed" if not result["result"]["success"] else "Passed",
       "score": 0 if not result["result"]["success"] else 0,
       "output": "Description: " + result["test"]["description"] + "\n\n" + result["result"]["reason"] if "description" in result["test"] and result["test"]["description"] else result["result"]["reason"],
       "visibility": "visible"
@@ -289,7 +289,7 @@ def main():
   # Format feedback and return results
   feedback += [{
     "name": result["name"],
-    "status": "failed" if not result["result"]["success"] else "passed",
+    "status": "Failed" if not result["result"]["success"] else "Passed",
     "score": 0 if not result["result"]["success"] else 0,
     "output": "Description: " + result["test"]["description"] + "\n\n" + result["result"]["reason"] if "description" in result["test"] and result["test"]["description"] else result["result"]["reason"],
     "visibility": "visible"
@@ -328,7 +328,7 @@ def setup():
 
     feedback = [{
       "name": "SAMPLE SOLUTION RESULT: " + result["name"],
-      "status": "failed" if not result["result"]["success"] else "passed",
+      "status": "Failed" if not result["result"]["success"] else "Passed",
       "score": 0 if not result["result"]["success"] else 0,
       "output": "Description: " + result["test"]["description"] + "\n\n" + result["result"]["reason"] if "description" in result["test"] and result["test"]["description"] else result["result"]["reason"],
       "visibility": "visible"
@@ -375,6 +375,7 @@ def setup():
     output_str += "All tests successfully uploaded to the database!\n"
 
   print(output_str)
+  print(test_response)
 
 if __name__ == "__main__":
   if len(sys.argv) == 2:
