@@ -41,8 +41,8 @@ Finally, THERE MUST BE AN "ADMIN" ACCOUNT. You need to add one account with user
 
 Finally, once this json document has been created, you can upload it to the running server with
 
-```curl -X POST http://{SERVER_IP}:{SERVER_PORT}/set-accounts -H "Authorization: {AUTH_TOKEN}" -H "Content-Type: application/json" -d @accounts.json```
+```curl -X POST http://{SERVER_IP}:{SERVER_PORT}/create-accounts -H "Authorization: {AUTH_TOKEN}" -H "Content-Type: application/json" -d @accounts.json```
 
-Note that currently, this route deletes any prior accounts created, but there are plans to add a route to only create new accounts. Also note that you need to authorization token to perform this "high level" action.
+If you pass in the extra query parameter of `reset=True`, then all accounts will be deleted before making the ones uploaded. Otherwise, the new ones are just added to the old ones. Also note that you need to authorization token to perform this "high level" action.
 
 There are many other routes in the server that you can use for testing/administrating, and you can check out `index.js` to see what they are. You can just then form your own `curl` requests to use those routes as you wish.
