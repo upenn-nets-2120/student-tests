@@ -33,7 +33,7 @@ To setup the autograder, follow the following steps:
 
     NOTE: This should NOT include any setup for the entire autograder docker container. For example, things like `apt-get update`, `apt-get install ...`, `pip install ...`, etc. should NOT be included in this file. These should be at the top of `setup.sh` at the root of the autograder. If you're confused about this distinction, think about it like this: would I need to run this command for every project/assignment I do, or just once on my entire computer? If it's the former, include it, if it's the later, don't.
 
-    Don't worry about cleaning up and hanging background processes in `post-test.sh`. Before the post is run, any processes still running from the `pre-test.sh` will be terminated.
+    Don't worry about cleaning up hanging background processes in `post-test.sh`. Before the post is run, any processes still running from the `pre-test.sh` will be terminated.
 
 6. Modify `post-test.sh` to contain the command(s) that need to execute after the tests are run. Normally this file can be left empty, but for an example where it might not be, consider the following: The assignment is for students to use DynamoDB and upload tests to a table, so the `pre-test.sh` creates the table (if the students aren't responsible for that), and then `post-test.sh` might delete the table.
 
