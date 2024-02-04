@@ -60,5 +60,3 @@ Here are a list of the config variables and what they affect. Note that all of t
 - `pomPath`: When using Maven and a Java server, this is the path to the `pom.xml` file. (In future versions, this is subject to removal in favor of the `pom.xml` file always being at the root). If you are using a different server, then this variable can be set to anything.
 
 - `jUnitTestLocation`: When using Maven and JUnit 4 tests, this is the path to the directory that contains all of the tests. (In future versions, this is subject to removal in favor of a field in each JUnit 4 test case written in the test file). If you are using a different server, then this variable can be set to anything.
-
-- `scriptTimeout`: **IMPORTANT:** The amount of time given to `pre-test.sh` and `post-test.sh` to run before timing them out. Note that `pre-test.sh` is NOT expected to terminate, for example in the case where its last command is to start a server (in the foreground). In this case, the timeout is the amount of time waited before running the tests. If an error is thrown in this time, the process exists and the error will appear, otherwise the tests will continue to be executed.
