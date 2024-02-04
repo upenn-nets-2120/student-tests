@@ -2,7 +2,7 @@ import json
 import subprocess
 import requests
 import shlex
-import time, os, sys
+import time, os, sys, signal
 import re
 import base64
 import xml.etree.ElementTree as ET
@@ -18,7 +18,7 @@ def load_config():
   global config
   with open('/autograder/source/test-grader/config.json', 'r') as file:
     config = json.load(file)
-    required_config_vars = ['numPublicTestsForAccess', 'maxTestsPerStudent', 'maxNumReturnedTests', 'weightReturnedTests', 'pomPath', 'jUnitTestLocation']
+    required_config_vars = ['numPublicTestsForAccess', 'maxTestsPerStudent', 'maxNumReturnedTests', 'weightReturnedTests', 'pomPath', 'jUnitTestLocation', 'scriptTimeout']
     for var in required_config_vars:
       assert var in config, f"Missing config variable: '{var}'"
 
@@ -88,7 +88,7 @@ def run_junit_tests(test, setup):
   test_file_path = os.path.join(base, config["jUnitTestLocation"], f"{test['name']}.java")
   pom_file_path = os.path.join(base, config["pomPath"])
   # fix path
-  report_path = os.path.join(base, "sample-server", "target/surefire-reports", f"TEST-nets2120.{test['name']}.xml")
+  report_path = os.path.join(base, "sample-submission", "target/surefire-reports", f"TEST-nets2120.{test['name']}.xml")
   with open(test_file_path, 'wb') as file:
     file.write(raw_tests)
   subprocess.run(["mvn", "test", "-f", pom_file_path])
@@ -116,12 +116,15 @@ def run_junit_tests(test, setup):
 
 
 def run_test(test, setup):
-  if test["type"] == "curl":
-    return run_curl_test(test)
-  elif test["type"] == "junit":
-    return run_junit_tests(test, setup)
-  else:
-    return {"success": False, "reason": f"Unknown test type '{test['type']}'"}
+  try:
+    if test["type"] == "curl":
+      return run_curl_test(test)
+    elif test["type"] == "junit":
+      return run_junit_tests(test, setup)
+    else:
+      return {"success": False, "reason": f"Unknown test type '{test['type']}'"}
+  except Exception as e:
+    return {"success": False, "reason": f"Error running test '{test['name']}'. It is likely the test is formatted incorrectly: {e}"}
 
 
 def run_tests(tests, setup=False):
@@ -198,24 +201,69 @@ def upload_results(assignment_title, student_id, results):
   return response
 
 
-def start_server(server_path, setup=False):
-  if setup:
-    subprocess.run(["bash", "setup-server.sh"], cwd=server_path, check=True)
-  process = subprocess.Popen(["bash", "run-server.sh"], cwd=server_path)
-  time.sleep(5)
-  return process
+def pre_test(submission_path):
+  timeout = config["scriptTimeout"] # seconds, also time given to run the pre-test script before continuing
+  process = subprocess.Popen(["bash", "/autograder/source/sample-submission/pre-test.sh"], cwd=submission_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+  try:
+    process.wait(timeout=5 + timeout)
+    # Check if process exits before timeout with error
+    if process.returncode != 0:
+      stderr = process.stderr.read()
+      return None, f"Pre-test script failed with return code {process.returncode} and stderr: {stderr}"
+  except subprocess.TimeoutExpired:
+    pass # Timeout expired, no immediate errors were detected and the process can continue
+  return process, ""
 
 
-def stop_server(process):
-  process.terminate()
-  process.wait()
+def post_test(pre_process, submission_path):
+  if pre_process.poll() is None: # Check if pre_process is still running
+    pre_process.terminate()
+    os.killpg(os.getpgid(pre_process.pid), signal.SIGTERM)
+    pre_process.wait()
+
+  timeout = config["scriptTimeout"] # seconds, also time given to run the pre-test script before continuing
+  process = subprocess.Popen(["bash", "/autograder/source/sample-submission/post-test.sh"], cwd=submission_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+  try:
+    _, stderr = process.communicate(timeout=timeout)
+    did_timeout = False
+  except subprocess.TimeoutExpired:
+    process.terminate()
+    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+    process.wait()
+    _, stderr = process.communicate()
+    did_timeout = True
+
+  if process.returncode != 0:
+    return f"Post-test script failed with return code {process.returncode} and stderr: {stderr}"
+  elif len(stderr) > 0:
+    return f"Post-test script failed with stderr: {stderr}"
+  elif did_timeout:
+    return f"Post-test script did not complete within {timeout} seconds. If you believe this limit is too small, please contact the assignment administrators. Here is stderr: {stderr}"
+  return ""
 
 
 def write_output(data):
-  if len(data["tests"]) == 0:
-    data["score"] = 0
-  with open('/autograder/results/results.json', 'w') as file:
-    json.dump(data, file)
+  results_file = '/autograder/results/results.json'
+  
+  if os.path.exists(results_file):
+    with open(results_file, 'r') as file:
+      existing_data = json.load(file)
+  else:
+    existing_data = {}
+  
+  if "score" not in existing_data:
+    existing_data["score"] = data.get("score", 0)
+  
+  if "output" in existing_data and "output" in data:
+    existing_data["output"] += "\n\n" + data["output"]
+  else:
+    existing_data["output"] = data.get("output", "")
+  
+  if "tests" in data:
+    existing_data.setdefault("tests", []).extend(data["tests"])
+  
+  with open(results_file, 'w') as file:
+    json.dump(existing_data, file)
 
 
 def main():
@@ -230,10 +278,16 @@ def main():
   
   output_str = ""
   if len(tests) > 0:
-    # Run tests on sample server
-    sample_server = start_server("/autograder/source/sample-server")
+    # Run tests on sample submission
+    pre_process, result = pre_test("/autograder/source/sample-submission")
+    if result != "":
+      write_output({"output": f"Error running pre-test script for sample submission:, please contact assignment administrators:\n{result}", "tests": []})
+      return
     sample_results = run_tests(tests)
-    stop_server(sample_server)
+    result = post_test(pre_process, "/autograder/source/sample-submission")
+    if result != "":
+      write_output({"output": f"Error running post-test script for sample submission:, please contact assignment administrators:\n{result}", "tests": []})
+      return
 
     # Format feedback and ensure they passed sample
     feedback = [{
@@ -268,11 +322,14 @@ def main():
 
   # Upload tests to the database, get response of all tests
   response = upload_tests(assignment_title, student_id, successful_tests, config)
+  if response.status_code < 200 or response.status_code >= 300:
+    write_output({"output": "Error uploading tests to the database. Please contact the assignment administrators. Response status " + response.status_code + ":\n" + response.text + "\nIn the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
+    return
   json_response = response.json()
-  if response.status_code < 200 or response.status_code >= 300 or not json_response['success']:
+  if not json_response['success']:
     write_output({"output": "Error uploading tests to the database. Please contact the assignment administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
     return
-  if len(json_response['failedToAdd']) > 0:
+  elif len(json_response['failedToAdd']) > 0:
     output_str += "Failed to upload all tests to the database. Make sure test names are unique if you want them to be counted seperately! Please see the following reasons:\n\n"
     for failure in json_response['failedToAdd']:
       output_str += failure['name'] + ": \t" + failure['reason'] + "\n"
@@ -282,9 +339,15 @@ def main():
   all_tests = response.json()['tests']
 
   # Run tests on student submission
-  student_server = start_server("/autograder/submission", setup=True)
+  student_pre_process, result = pre_test("/autograder/submission")
+  if result != "":
+    write_output({"output": f"Error running pre-test script for student submission, please contact assignment administrators:\n{result}\nIn the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
+    return
   all_results = run_tests(all_tests)
-  stop_server(student_server)
+  result = post_test(student_pre_process, "/autograder/submission")
+  if result != "":
+    write_output({"output": f"Error running post-test script for student submission, please contact assignment administrators:\n{result}\nIn the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
+    return
   
   # Format feedback and return results
   feedback += [{
@@ -309,22 +372,29 @@ def main():
   
   write_output({"output": output_str, "tests": feedback})
 
+
 def setup():
   load_config()
   
   # Read default tests
   try:
-    with open('/autograder/source/sample-server/default-tests.json', 'r') as file:
+    with open('/autograder/source/sample-submission/default-tests.json', 'r') as file:
       tests = json.load(file)
   except:
     tests = []
   
   output_str = ""
   if len(tests) > 0:
-    # Run tests on sample server
-    sample_server = start_server("/autograder/source/sample-server")
-    sample_results = run_tests(tests, setup=True)
-    stop_server(sample_server)
+    # Run tests on sample submission
+    pre_process, result = pre_test("/autograder/source/sample-submission")
+    if result != "":
+      print("Error running pre-test script for sample submission:\n" + result)
+      return
+    sample_results = run_tests(tests)
+    result = post_test(pre_process, "/autograder/source/sample-submission")
+    if result != "":
+      print("Error running post-test script for sample submission::\n" + result)
+      return
 
     feedback = [{
       "name": "SAMPLE SOLUTION RESULT: " + result["name"],
@@ -362,11 +432,14 @@ def setup():
 
   # Upload tests to the database, get response of all tests
   response = upload_tests(assignment_title, "-1", successful_tests, config)
+  if response.status_code < 200 or response.status_code >= 300:
+    print("Error uploading tests to the database. Please contact the database administrators. Response status " + response.status_code + ":\n" + response.text + "\nIn the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str + "\n" + test_response)
+    return
   json_response = response.json()
-  if response.status_code < 200 or response.status_code >= 300 or not json_response['success']:
+  if not json_response['success']:
     print("Error uploading tests to the database. Please contact the database administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str + "\n" + test_response)
     return
-  if len(json_response['failedToAdd']) > 0:
+  elif len(json_response['failedToAdd']) > 0:
     output_str += "Failed to upload all tests to the database. Make sure test names are unique if you want them to be counted seperately! Please see the following reasons:\n\n"
     for failure in json_response['failedToAdd']:
       output_str += failure['name'] + ": \t" + failure['reason'] + "\n"
@@ -376,6 +449,7 @@ def setup():
 
   print(output_str)
   print(test_response)
+
 
 if __name__ == "__main__":
   if len(sys.argv) == 2:

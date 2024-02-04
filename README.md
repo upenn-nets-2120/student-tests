@@ -12,7 +12,7 @@ Follow the instructions above and in the other `README`s listed above.
 
 ## How to Use As a Student
 
-Thank you for using this framework! It is actually really simple to use. It allows you to submit your own test cases that are then uploaded, and you can run your code against any other students' uploaded tests as well! To get started, you can upload your test cases in a file called `tests.json` just with your normal Gradescope submission. The structure of this file is listed below, but you can also look at the file itself for more details:
+Thank you for using this framework! It is actually really simple to use. It allows you to submit your own test cases that are then uploaded, and you can run your code against any other students' uploaded tests as well! To get started, you can upload your test cases in a file called `tests.json` just with your normal Gradescope submission. The structure of this file is listed below, but you can also look at the file itself for more details. The folder `example-student-submission` contains an example submission on a hypothetical assignment to create a simple express server.
 
 ```json
 [

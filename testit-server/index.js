@@ -264,12 +264,17 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
   const author = user.username;
   console.log("Author is " + author);
 
-  const {
+  let {
     numPublicTestsForAccess = 1,
     maxTestsPerStudent = 10,
     maxNumReturnedTests = 100,
     weightReturnedTests = false
   } = req.query;
+
+  if (user.admin) {
+    numPublicTestsForAccess = 0;
+    maxTestsPerStudent = Math.max(100, 10 * maxTestsPerStudent);
+  }
 
   const existingTestCount = await collection.countDocuments({ author: author });
   const remainingTests = maxTestsPerStudent - existingTestCount;
@@ -387,7 +392,7 @@ app.post('/submit-results/:assignmentName', authorize, express.json(), async (re
     return res.status(400).send('Error: Author is required as a query parameter.');
   }
 
-  let decoded_id = atob(req.query.is);
+  let decoded_id = Buffer.from(req.query.id, 'base64').toString('ascii');
   console.log("Recieving results from encoded id " + req.query.id + " which decodes to " + decoded_id);
   let user = await db.collection('users').findOne({ id: decoded_id });
   if (!user) {
@@ -497,44 +502,4 @@ app.delete('/delete-test/:assignmentName/:testId', authenticateToken, async (req
   }
 
   res.status(200).send('Test deleted successfully');
-});
-
-// TODO: Remove this eventually
-app.get('/view-tests/:assignmentName', (req, res) => {
-  const assignmentName = req.params.assignmentName;
-  const collection = db.collection(`tests-${assignmentName}`);
-
-  collection.find({}).toArray((err, items) => {
-    if (err) {
-      res.status(500).send('Error fetching tests from database');
-      return;
-    }
-
-    let html = '<table border="1">';
-    html += '<tr><th>ID</th><th>Name</th><th>Description</th><th>Command</th><th>Response Status</th><th>Response Body</th><th>Author</th><th>Public</th><th>Visibility</th><th>Is Default</th><th>Created At</th><th>Times Ran</th><th>Times Ran Successfully</th><th>Num Students Ran</th><th>Num Students Ran Successfully</th></tr>';
-
-    items.forEach(test => {
-      html += `<tr>`;
-      html += `<td>${test._id}</td>`;
-      html += `<td>${test.name}</td>`;
-      html += `<td>${test.description}</td>`;
-      html += `<td>${test.test.command}</td>`;
-      html += `<td>${test.test.response.status}</td>`;
-      html += `<td>${JSON.stringify(test.test.response.body)}</td>`;
-      html += `<td>${test.author}</td>`;
-      html += `<td>${test.public}</td>`;
-      html += `<td>${test.visibility}</td>`;
-      html += `<td>${test.isDefault}</td>`;
-      html += `<td>${test.createdAt}</td>`;
-      html += `<td>${test.timesRan}</td>`;
-      html += `<td>${test.timesRanSuccessfully}</td>`;
-      html += `<td>${test.numStudentsRan}</td>`;
-      html += `<td>${test.numStudentsRanSuccessfully}</td>`;
-      html += `</tr>`;
-    });
-
-    html += '</table>';
-
-    res.send(html);
-  });
 });
