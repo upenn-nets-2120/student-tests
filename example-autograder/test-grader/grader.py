@@ -212,12 +212,18 @@ def pre_test(submission_path):
 
 
 def post_test(pre_pgid, submission_path):
-  os.killpg(pre_pgid, signal.SIGTERM) # Terminate leftover processes
+  try:
+    os.killpg(pre_pgid, signal.SIGTERM) # Terminate leftover processes
+  except:
+    pass
 
   process = subprocess.Popen(["bash", "/autograder/source/sample-submission/pre-test.sh"], cwd=submission_path, start_new_session=True)
   pgid = os.getpgid(process.pid)
   process.wait()
-  os.killpg(pgid, signal.SIGTERM)
+  try:
+    os.killpg(pgid, signal.SIGTERM)
+  except:
+    pass
   if process.returncode != 0:
     return f"Post-test script failed with return code {process.returncode}."
   return ""
