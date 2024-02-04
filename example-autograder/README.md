@@ -20,11 +20,11 @@ To setup the autograder, follow the following steps:
 
 4. In the `sample-submission` directory, add in all files required to run your sample solution to the assignment. You may delete/replace the already existing `index.js` and `package.json` that show an example. Note that you can find an example of what a Java server project would look like in the `example-java-server` folder, but if you actually wanted to use something like this, you would need to rename the folder to `sample-submission`.
 
-5. Modify `pre-test.sh` to contain the command(s) needed to setup the environment of your sample solution (before running the tests). Note that this script doesn't necessarily need to terminate, see the `scriptTimeout` variable below for more details. For example, when running an express server, it would just be
+5. Modify `pre-test.sh` to contain the command(s) needed to setup the environment of your sample solution (before running the tests). Note that this script IS expected to terminate, so if you need to run a server or something similar to that, it must be done in the background:
 
     ```
     npm install
-    node index.js
+    node index.js &
     ```
 
     For running a Java server, it may include commands like `mvn install`, `mvn clean install -DskipTests`, `java -jar server-name.jar`, or possibly compiling some classes and running `java -cp classpath the.main.Class`.
@@ -32,6 +32,8 @@ To setup the autograder, follow the following steps:
     When writing this file and `post-test.sh` explained next, they will already be run in the correct directory. E.g. when the autograder is being set up, they will be run in `autograder/source/sample-submission`, but when a student submits they will be run in `autograder/submission`. As a result, YOU SHOULD NOT use `cd` to change directory to these, and should instead use `./` to refer to the current location. You can still use `cd` to change to these if necessary to refer to another file (or include `sample-submission` in a filepath) if this is what you intend, but just know that these files will be expected to execute as intended when run in both of the aforementioned directories.
 
     NOTE: This should NOT include any setup for the entire autograder docker container. For example, things like `apt-get update`, `apt-get install ...`, `pip install ...`, etc. should NOT be included in this file. These should be at the top of `setup.sh` at the root of the autograder. If you're confused about this distinction, think about it like this: would I need to run this command for every project/assignment I do, or just once on my entire computer? If it's the former, include it, if it's the later, don't.
+
+    Don't worry about cleaning up and hanging background processes in `post-test.sh`. Before the post is run, any processes still running from the `pre-test.sh` will be terminated.
 
 6. Modify `post-test.sh` to contain the command(s) that need to execute after the tests are run. Normally this file can be left empty, but for an example where it might not be, consider the following: The assignment is for students to use DynamoDB and upload tests to a table, so the `pre-test.sh` creates the table (if the students aren't responsible for that), and then `post-test.sh` might delete the table.
 

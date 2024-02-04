@@ -3,7 +3,6 @@ import subprocess
 import requests
 import shlex
 import time, os, sys, signal
-import select
 import re
 import base64
 import xml.etree.ElementTree as ET
@@ -19,7 +18,7 @@ def load_config():
   global config
   with open('/autograder/source/test-grader/config.json', 'r') as file:
     config = json.load(file)
-    required_config_vars = ['numPublicTestsForAccess', 'maxTestsPerStudent', 'maxNumReturnedTests', 'weightReturnedTests', 'pomPath', 'jUnitTestLocation', 'scriptTimeout']
+    required_config_vars = ['numPublicTestsForAccess', 'maxTestsPerStudent', 'maxNumReturnedTests', 'weightReturnedTests', 'pomPath', 'jUnitTestLocation']
     for var in required_config_vars:
       assert var in config, f"Missing config variable: '{var}'"
 
@@ -203,57 +202,25 @@ def upload_results(assignment_title, student_id, results):
 
 
 def pre_test(submission_path):
-  timeout = config["scriptTimeout"] # seconds, also time given to run the pre-test script before continuing
-  process = subprocess.Popen(["bash", "/autograder/source/sample-submission/pre-test.sh"], cwd=submission_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
-  try:
-    process.wait(timeout=5 + timeout)
-    # Check if process exits before timeout with error
-    if process.returncode != 0:
-      stderr = process.stderr.read()
-      stdout = process.stdout.read()
-      return None, f"Pre-test script failed with return code {process.returncode} and stderr: {stderr}", stdout
-  except subprocess.TimeoutExpired:
-    pass # Timeout expired, no immediate errors were detected and the process can continue
-  
-  # Read currently available stdout
-  os.set_blocking(process.stdout.fileno(), False)
-  stdout = ""
-  while True:
-    if select.select([process.stdout], [], [], 0.0)[0]:
-      data = os.read(process.stdout.fileno(), 4096)
-      if not data:
-        break
-      stdout += data.decode('utf-8')
-    else:
-      break
-  return process, "", stdout
-
-
-def post_test(pre_process, submission_path):
-  if pre_process.poll() is None: # Check if pre_process is still running
-    pre_process.terminate()
-    os.killpg(os.getpgid(pre_process.pid), signal.SIGTERM)
-    pre_process.wait()
-
-  timeout = config["scriptTimeout"] # seconds, also time given to run the pre-test script before continuing
-  process = subprocess.Popen(["bash", "/autograder/source/sample-submission/post-test.sh"], cwd=submission_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
-  try:
-    stdout, stderr = process.communicate(timeout=timeout)
-    did_timeout = False
-  except subprocess.TimeoutExpired:
-    process.terminate()
-    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-    process.wait()
-    stdout, stderr = process.communicate()
-    did_timeout = True
-
+  process = subprocess.Popen(["bash", "/autograder/source/sample-submission/pre-test.sh"], cwd=submission_path, start_new_session=True)
+  pgid = os.getpgid(process.pid)
+  process.wait()
+  time.sleep(5)
   if process.returncode != 0:
-    return f"Post-test script failed with return code {process.returncode} and stderr: {stderr}", stdout
-  elif len(stderr) > 0:
-    return f"Post-test script failed with stderr: {stderr}", stdout
-  elif did_timeout:
-    return f"Post-test script did not complete within {timeout} seconds. If you believe this limit is too small, please contact the assignment administrators. Here is stderr: {stderr}", stdout
-  return "", stdout
+    return None, f"Pre-test script failed with return code {process.returncode}."
+  return pgid, ""
+
+
+def post_test(pre_pgid, submission_path):
+  os.killpg(pre_pgid, signal.SIGTERM) # Terminate leftover processes
+
+  process = subprocess.Popen(["bash", "/autograder/source/sample-submission/pre-test.sh"], cwd=submission_path, start_new_session=True)
+  pgid = os.getpgid(process.pid)
+  process.wait()
+  os.killpg(pgid, signal.SIGTERM)
+  if process.returncode != 0:
+    return f"Post-test script failed with return code {process.returncode}."
+  return ""
 
 
 def write_output(data):
@@ -293,14 +260,12 @@ def main():
   output_str = ""
   if len(tests) > 0:
     # Run tests on sample submission
-    pre_process, err, out = pre_test("/autograder/source/sample-submission")
-    print(out)
+    pre_pgid, err = pre_test("/autograder/source/sample-submission")
     if err != "":
       write_output({"output": f"Error running pre-test script for sample submission:, please contact assignment administrators:\n{err}", "tests": []})
       return
     sample_results = run_tests(tests)
-    err, out = post_test(pre_process, "/autograder/source/sample-submission")
-    print(out)
+    err = post_test(pre_pgid, "/autograder/source/sample-submission")
     if err != "":
       write_output({"output": f"Error running post-test script for sample submission:, please contact assignment administrators:\n{err}", "tests": []})
       return
@@ -355,14 +320,12 @@ def main():
   all_tests = response.json()['tests']
 
   # Run tests on student submission
-  student_pre_process, err, out = pre_test("/autograder/submission")
-  print(out)
+  student_pre_pgid, err = pre_test("/autograder/submission")
   if err != "":
     write_output({"output": f"Error running pre-test script for student submission, please contact assignment administrators:\n{err}\nIn the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
     return
   all_results = run_tests(all_tests)
-  err, out = post_test(student_pre_process, "/autograder/submission")
-  print(out)
+  err = post_test(student_pre_pgid, "/autograder/submission")
   if err != "":
     write_output({"output": f"Error running post-test script for student submission, please contact assignment administrators:\n{err}\nIn the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
     return
@@ -404,14 +367,12 @@ def setup():
   output_str = ""
   if len(tests) > 0:
     # Run tests on sample submission
-    pre_process, err, out = pre_test("/autograder/source/sample-submission")
-    print("Pre-test STDOUT: " + out)
+    pre_pgid, err = pre_test("/autograder/source/sample-submission")
     if err != "":
       print("Error running pre-test script for sample submission:\n" + err)
       return
     sample_results = run_tests(tests)
-    err, out = post_test(pre_process, "/autograder/source/sample-submission")
-    print("Post-test STDOUT: " + out)
+    err = post_test(pre_pgid, "/autograder/source/sample-submission")
     if err != "":
       print("Error running post-test script for sample submission::\n" + err)
       return
