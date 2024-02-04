@@ -301,7 +301,7 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
     testCase.visibility = "limited"; // 3 options, full (actual content of test can be seen), limited (only name, description, and feedback), none (only author can see)
     testCase.isDefault = false; // default would be true for instructor-created test cases that show up even if a student hasn't submitted any tests
 
-    if (testCase.author === -1) {
+    if (testCase.author === "-1") {
       testCase.isDefault = true;
     }
 
