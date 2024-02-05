@@ -23,6 +23,15 @@ def load_config():
       assert var in config, f"Missing config variable: '{var}'"
 
 
+def load_metadata():
+  global metadata
+  try:
+    with open('/autograder/submission_metadata.json', 'r') as file:
+      metadata = json.load(file)
+  except:
+    metadata = []
+
+
 def compare_json(json1, json2, any_order):
   if not any_order:
     return json1 == json2
@@ -168,21 +177,13 @@ def check_database_health():
     return False
 
 
-def get_student_id():
-  with open('/autograder/submission_metadata.json', 'r') as file:
-    metadata = json.load(file)
-    return metadata['users'][0]['email']
-
-
 def get_assignment_title():
   def clean_title(title):
     safe_title = re.sub(r'\s+', '_', title.lower().strip())
     return re.sub(r'[^\w-]', '', safe_title)
   if 'config' in globals() and 'assignmentTitle' in config:
     return clean_title(config['assignmentTitle'])
-  with open('/autograder/submission_metadata.json', 'r') as file:
-    metadata = json.load(file)
-    return clean_title(metadata['assignment']['title'])
+  return clean_title(metadata['assignment']['title'])
 
 
 def upload_tests(assignment_title, student_id, tests, params):
@@ -280,6 +281,7 @@ def write_output(data):
 
 def main():
   load_config()
+  load_metadata()
   
   # Read tests
   try:
@@ -331,7 +333,7 @@ def main():
   if not check_database_health():
     write_output({"output": "Server is not running or not healthy. Please contact the assignment administrators. In the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
     return
-  student_id = get_student_id()
+  student_id = metadata['users'][0]['email']
   assignment_title = get_assignment_title()
 
   # Upload tests to the database, get response of all tests
