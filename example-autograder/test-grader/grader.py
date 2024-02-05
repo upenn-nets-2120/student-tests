@@ -18,7 +18,7 @@ def load_config():
   global config
   with open('/autograder/source/test-grader/config.json', 'r') as file:
     config = json.load(file)
-    required_config_vars = ['numPublicTestsForAccess', 'maxTestsPerStudent', 'maxNumReturnedTests', 'weightReturnedTests', 'pomPath', 'jUnitTestLocation', 'groupedDefaultTestsScore', 'submitTestsScore', 'timeToDeadline']
+    required_config_vars = ['numPublicTestsForAccess', 'maxTestsPerStudent', 'maxNumReturnedTests', 'weightReturnedTests', 'pomPath', 'jUnitTestLocation', 'groupedDefaultTestsScore', 'submitTestsScore', 'timeToDeadline', 'waitTimeAfterPreTest']
     for var in required_config_vars:
       assert var in config, f"Missing config variable: '{var}'"
 
@@ -205,7 +205,7 @@ def pre_test(submission_path):
   process = subprocess.Popen(["bash", "/autograder/source/sample-submission/pre-test.sh"], cwd=submission_path, start_new_session=True)
   pgid = os.getpgid(process.pid)
   process.wait()
-  time.sleep(5)
+  time.sleep(config["waitTimeAfterPreTest"])
   if process.returncode != 0:
     return None, f"Pre-test script failed with return code {process.returncode}."
   return pgid, ""

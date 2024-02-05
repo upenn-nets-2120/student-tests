@@ -67,4 +67,6 @@ Here are a list of the config variables and what they affect. Note that all of t
 
 - `submitTestsScore`: See the explanation in #8 above
 
-- `timeToDeadline`: See the explanation in #8 above
+- `timeToDeadline`: See the explanation in #8 above. It is in hours
+
+- `waitTimeAfterPreTest`: This is the amount of seconds waited after the `pre-test.sh` script is run before running the tests. For example, if the last line after `pre-test.sh` is to start a server in the background, this variable lets a delay pass before running the tests so the server can boot up. Note that Gradescope is usually slower, so take this into account. Usually 5 seconds seems about appropriate for a server, but it seems that occasionally this may be too short so it's set to 8 by default.
