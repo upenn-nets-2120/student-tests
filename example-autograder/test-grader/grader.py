@@ -18,7 +18,7 @@ def load_config():
   global config
   with open('/autograder/source/test-grader/config.json', 'r') as file:
     config = json.load(file)
-    required_config_vars = ['numPublicTestsForAccess', 'maxTestsPerStudent', 'maxNumReturnedTests', 'weightReturnedTests', 'pomPath', 'jUnitTestLocation']
+    required_config_vars = ['numPublicTestsForAccess', 'maxTestsPerStudent', 'maxNumReturnedTests', 'weightReturnedTests', 'pomPath', 'jUnitTestLocation', 'groupedDefaultTestsScore', 'submitTestsScore', 'timeToDeadline']
     for var in required_config_vars:
       assert var in config, f"Missing config variable: '{var}'"
 
@@ -230,16 +230,41 @@ def post_test(pre_pgid, submission_path):
 
 
 def write_output(data):
+  passed_defaults = True
+  for test in data["tests"]:
+    if test["isDefault"] and test["status"] == "failed":
+      passed_defaults = False
+      break
+  # to be implemented, use timeToDeadline to check if in time
+  public_tests_passed = {
+    "name": f"Submitted at least {config['numPublicTestsForAccess']} public test(s) {config['timeToDeadline']} hours before deadline",
+    "status": "passed",
+    "score": config["submitTestsScore"] if True else 0,
+    "max_score": config["submitTestsScore"],
+    "visibility": "visible"
+  }
+  public_defaults_passed = {
+    "name": "Passed all of the default tests",
+    "status": "passed",
+    "score": config["groupedDefaultTestsScore"] if passed_defaults else 0,
+    "max_score": config["groupedDefaultTestsScore"],
+    "visibility": "visible"
+  }
+  if config["submitTestsScore"] > 0:
+    data["tests"].append(public_tests_passed)
+  if config["groupedDefaultTestsScore"] > 0:
+    data["tests"].append(public_defaults_passed)
+
   results_file = '/autograder/results/results.json'
-  
   if os.path.exists(results_file):
     with open(results_file, 'r') as file:
       existing_data = json.load(file)
   else:
     existing_data = {}
-  
-  if "score" not in existing_data:
-    existing_data["score"] = data.get("score", 0)
+
+  if "score" in existing_data:
+    for test in data["tests"]:
+      existing_data["score"] += test["score"]
   
   if "output" in existing_data and "output" in data:
     existing_data["output"] += "\n\n" + data["output"]
@@ -279,8 +304,10 @@ def main():
     # Format feedback and ensure they passed sample
     feedback = [{
       "name": "SAMPLE SOLUTION RESULT: " + result["name"],
-      "status": "Failed" if not result["result"]["success"] else "Passed",
+      "status": "failed" if not result["result"]["success"] else "passed",
       "score": 0 if not result["result"]["success"] else 0,
+      "max_score": 0,
+      "isDefault": False,
       "output": "Description: " + result["test"]["description"] + "\n\n" + result["result"]["reason"] if "description" in result["test"] and result["test"]["description"] else result["result"]["reason"],
       "visibility": "visible"
     } for result in sample_results["results"]]
@@ -339,8 +366,10 @@ def main():
   # Format feedback and return results
   feedback += [{
     "name": result["name"],
-    "status": "Failed" if not result["result"]["success"] else "Passed",
-    "score": 0 if not result["result"]["success"] else 0,
+    "status": "failed" if not result["result"]["success"] else "passed",
+    "score": result["test"]["score"] if result["test"].get("isDefault", False) and "score" in result["test"] and result["result"]["success"] else 0,
+    "max_score": result["test"]["score"] if result["test"].get("isDefault", False) and "score" in result["test"] else 0,
+    "isDefault": result["test"].get("isDefault", False),
     "output": "Description: " + result["test"]["description"] + "\n\n" + result["result"]["reason"] if "description" in result["test"] and result["test"]["description"] else result["result"]["reason"],
     "visibility": "visible"
   } for result in all_results["results"]]
@@ -385,8 +414,10 @@ def setup():
 
     feedback = [{
       "name": "SAMPLE SOLUTION RESULT: " + result["name"],
-      "status": "Failed" if not result["result"]["success"] else "Passed",
+      "status": "failed" if not result["result"]["success"] else "passed",
       "score": 0 if not result["result"]["success"] else 0,
+      "max_score": 0,
+      "isDefault": False,
       "output": "Description: " + result["test"]["description"] + "\n\n" + result["result"]["reason"] if "description" in result["test"] and result["test"]["description"] else result["result"]["reason"],
       "visibility": "visible"
     } for result in sample_results["results"]]

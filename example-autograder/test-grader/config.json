@@ -5,5 +5,8 @@
   "maxNumReturnedTests": 100,
   "weightReturnedTests": false,
   "pomPath": "sample-java-project/pom.xml",
-  "jUnitTestLocation": "sample-java-project/src/test/java/nets2120"
+  "jUnitTestLocation": "sample-java-project/src/test/java/nets2120",
+  "groupedDefaultTestsScore": 0,
+  "submitTestsScore": 0,
+  "timeToDeadline": 72
 }
