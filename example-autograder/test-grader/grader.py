@@ -5,6 +5,7 @@ import shlex
 import time, os, sys, signal
 import re
 import base64
+import shutil
 import xml.etree.ElementTree as ET
 
 
@@ -18,7 +19,7 @@ def load_config():
   global config
   with open('/autograder/source/test-grader/config.json', 'r') as file:
     config = json.load(file)
-    required_config_vars = ['numPublicTestsForAccess', 'maxTestsPerStudent', 'maxNumReturnedTests', 'weightReturnedTests', 'pomPath', 'jUnitTestLocation']
+    required_config_vars = ['numPublicTestsForAccess', 'maxTestsPerStudent', 'maxNumReturnedTests', 'weightReturnedTests', 'pomPath']
     for var in required_config_vars:
       assert var in config, f"Missing config variable: '{var}'"
 
@@ -81,18 +82,38 @@ def run_curl_test(test):
 
   return {"success": True, "reason": f"Test '{test['name']}' Passed"}
 
+def run_junit_tests(test, setup, from_server):
+  if setup: # running default tests on sample server
+    base = "/autograder/source"
+    pom_file_path = os.path.join(base, config["pomPath"])
+    report_path = os.path.join(base, "sample-submission", "target/surefire-reports", f"TEST-nets2120.{test['name']}.xml")
+    subprocess.run(["mvn", "test", "-f", pom_file_path])
+  elif not from_server: # running student tests on sample server (test path in student submission should correspond to test path in sample submission)
+    student_test_path = os.path.join("/autograder/submission", test["location"])
+    sample_test_path = os.path.dirname(os.path.join("/autograder/source/", test["location"]))
+    report_path = os.path.join("/autograder/submission", "sample-submission", "target/surefire-reports", f"TEST-nets2120.{test['name']}.xml")
+    if not os.path.exists(student_test_path) or not os.path.exists(sample_test_path):
+      return [{"name": test['name'], "success": False, "reason": f"Location '{test['location']}' does not match any test file."}]
+    # copy file over to sample server, run tests
+    shutil.copyfile(student_test_path, sample_test_path)
+    subprocess.run(["mvn", "test", "-f", pom_file_path])
+  else: # running shared tests on student server
+    base = "/autograder/submission"
+    pom_file_path = os.path.join(base, config["pomPath"])
+    decoded_content = base64.b64decode(test['content']).decode('utf-8')
+    test_file_path = os.path.join(base, test['location'])
 
-def run_junit_tests(test, setup):
-  base = "/autograder/source" if setup else "/autograder/submission"
-  raw_tests = base64.b64decode(test["content"])
-  test_file_path = os.path.join(base, config["jUnitTestLocation"], f"{test['name']}.java")
-  pom_file_path = os.path.join(base, config["pomPath"])
-  # fix path
-  report_path = os.path.join(base, "sample-submission", "target/surefire-reports", f"TEST-nets2120.{test['name']}.xml")
-  with open(test_file_path, 'wb') as file:
-    file.write(raw_tests)
-  subprocess.run(["mvn", "test", "-f", pom_file_path])
+    with open(test_file_path, 'w') as file:
+        file.write(decoded_content)
 
+    # jank
+    i = test["name"].rfind(".")
+    if i == -1:
+      return [{"name": test['name'], "success": False, "reason": "Unable to parse test name"}]
+    class_name, method = test['name'][:i], test['name'][i+1:]
+    test_class_with_method = f"{class_name}#{method}"
+    report_path = os.path.join(base, "target/surefire-reports", f"TEST-{test_class_with_method}.xml")
+    subprocess.run(["mvn", "test", f"-Dtest={test_class_with_method}", "-f", pom_file_path])
   if not os.path.exists(report_path):
     return [{"name": test['name'], "success": False, "reason": "Test report not found"}]
 
@@ -111,27 +132,25 @@ def run_junit_tests(test, setup):
       test_results.append({"name": full_test_name, "success": False, "reason": f"Test '{full_test_name}' Failed: {reason}"})
     else:
       test_results.append({"name": full_test_name, "success": True, "reason": f"Test '{full_test_name}' Passed"})
-
   return test_results
 
-
-def run_test(test, setup):
+def run_test(test, setup, from_server):
   try:
     if test["type"] == "curl":
       return run_curl_test(test)
     elif test["type"] == "junit":
-      return run_junit_tests(test, setup)
+      return run_junit_tests(test, setup, from_server)
     else:
       return {"success": False, "reason": f"Unknown test type '{test['type']}'"}
   except Exception as e:
     return {"success": False, "reason": f"Error running test '{test['name']}'. It is likely the test is formatted incorrectly: {e}"}
 
 
-def run_tests(tests, setup=False):
+def run_tests(tests, setup=False, from_server=False):
   results = {"passed": 0, "failed": 0, "results": []}
 
   for test in tests:
-    test_result = run_test(test, setup)
+    test_result = run_test(test, setup, from_server)
     if test["type"] == "curl":
       results["results"].append({
         "name": test["name"],
@@ -143,6 +162,11 @@ def run_tests(tests, setup=False):
       else:
         results["failed"] += 1
     elif test["type"] == "junit":
+      if setup or not from_server:
+        test_path = os.path.join(f"/autograder/{'source' if setup else 'submission'}", test["location"])
+        with open(test_path, "rb") as f:
+          encoded_contents = base64.b64encode(f.read())
+        test["encoding"] = encoded_contents
       for t in test_result:
         results["results"].append({
           "name": t["name"],
@@ -330,7 +354,7 @@ def main():
   if err != "":
     write_output({"output": f"Error running pre-test script for student submission, please contact assignment administrators:\n{err}\nIn the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
     return
-  all_results = run_tests(all_tests)
+  all_results = run_tests(all_tests, from_server=True)
   err = post_test(student_pre_pgid, "/autograder/submission")
   if err != "":
     write_output({"output": f"Error running post-test script for student submission, please contact assignment administrators:\n{err}\nIn the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
@@ -377,7 +401,7 @@ def setup():
     if err != "":
       print("Error running pre-test script for sample submission:\n" + err)
       return
-    sample_results = run_tests(tests)
+    sample_results = run_tests(tests, setup=True)
     err = post_test(pre_pgid, "/autograder/source/sample-submission")
     if err != "":
       print("Error running post-test script for sample submission::\n" + err)

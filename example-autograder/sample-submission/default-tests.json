@@ -47,5 +47,11 @@
         }
       }
     }
+  },
+  {
+    "name": "AppTest",
+    "type": "junit",
+    "public": false,
+    "location": "sample-submission/src/test/java/nets2120/AppTest.java"
   }
 ]
