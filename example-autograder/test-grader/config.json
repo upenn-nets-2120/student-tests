@@ -4,5 +4,9 @@
   "maxTestsPerStudent": 10,
   "maxNumReturnedTests": 100,
   "weightReturnedTests": false,
-  "pomPath": "sample-submission/pom.xml"
+  "pomPath": "sample-submission/pom.xml",
+  "groupedDefaultTestsScore": 0,
+  "submitTestsScore": 0,
+  "timeToDeadline": 72,
+  "waitTimeAfterPreTest": 8
 }

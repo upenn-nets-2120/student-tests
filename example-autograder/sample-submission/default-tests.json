@@ -2,6 +2,7 @@
   {
     "name": "Default test 1",
     "description": "optional desc",
+    "score": 1,
     "type": "curl",
     "test": {
       "command": "curl -X GET http://localhost:3000/",
@@ -14,6 +15,7 @@
   },
   {
     "name": "Default test 2",
+    "score": 5,
     "type": "curl",
     "public": true,
     "test": {
@@ -27,6 +29,7 @@
   },
   {
     "name": "Default test 3",
+    "score": 0,
     "type": "curl",
     "public": true,
     "test": {
