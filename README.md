@@ -80,7 +80,7 @@ To make a curl test (type `curl`), just write the exact `curl` command you would
 
 ### JUnit 4 Tests:
 
-To make a JUnit 4 test (type `junit`), the `name` field needs to be exactly the same as the name of your test class. The only other field you need to specify is `location`, which should be the path to your test file. Note that you should not include the name of the root directory or anything above the root directory (i.e. if the path to the test file is `hw0-repo-example-student/src/test/java/nets2120/AppTest.java`, you should put `src/test/java/nets2120/AppTest.java` as the `location` field).
+To make a JUnit 4 test (type `junit`), first make the normal JUnit 4 test file as you would normally. Once you have this test file, you may then proceed to write the json in the following form. The `name` field needs to be exactly the same as the name of your test class. The only other field you need to specify (in addition to the generic ones) is `location`, which should be the path to your test file. Note that this path is relative to what you submit on Gradescope, so if you upload a `src` folder directly as one of the files to Gradescope, then your path would start with `src/` (e.g. if the path to the test file uploaded to Gradescope `src/test/java/nets2120/AppTest.java`, you should put `src/test/java/nets2120/AppTest.java` as the `location` field).
 
 ### How the Tests Work
 

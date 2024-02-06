@@ -4,7 +4,7 @@ This is an example autograder, to upload it to gradescope, zip these files toget
 
 To setup the autograder, follow the following steps:
 
-1. You may start either with an existing autograder, or just copy everything from this directory (`example-autograder`). If you already have an existing grader, you don't need to copy the `run_autograder` and `setup.sh`. Instead, add on the single line of each of these to the end of your corresponding files. If you want to copy this structure, as explained later, just rename it to `sample-submission` and delete/overwrite the other `sample-submission` folder.
+1. You may start either with an existing autograder, or just copy everything from this directory (`example-autograder`). If you already have an existing grader, you don't need to copy the `run_autograder` and `setup.sh`. Instead, add on the single line of each of these to the end of your corresponding files.
 
 2. In the `test-grader` folder, modify the `config.json` to match what you want. You can find a description of the variables below. It is important that you include the `assignmenTitle` field (and preferably it should match the Gradescope assignment title, but this isn't required and it should still work) (e.g. for Homework 1 Milestone 1 it might be `hw1_ms1`).
 
@@ -59,7 +59,7 @@ Here are a list of the config variables and what they affect. Note that all of t
 
 - `weightReturnedTests`: A boolean that specifies if the random sampling for `maxNumReturnedTests` is weighted or not. If it is weighted, then the random sample of returned tests will be weighted on the number of likes each test case has (but it will still include those with no likes).
 
-- `pomPath`: When using Maven and a Java server, this is the path to the `pom.xml` file. (In future versions, this is subject to removal in favor of the `pom.xml` file always being at the root). If you are using a different server, then this variable can be set to anything.
+- `pomPath`: When using Maven and a Java server, this is the path to the `pom.xml` file. If you are using a different server, then this variable can be set to anything.
 
 - `groupedDefaultTestsScore`: See the explanation in #8 above
 
