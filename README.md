@@ -52,11 +52,17 @@ Thank you for using this framework! It is actually really simple to use. It allo
       }
     }
   },
+  {
+    "name": "AppTest",
+    "type": "junit",
+    "public": false,
+    "location": "src/test/java/nets2120/AppTest.java"
+  }
   ...
 ]
 ```
 
-To add tests, add them to the list in this JSON file. The `name` is required, and it is the identifier of each test. Since test cases are shared between all students, the name MUST BE UNIQUE between all students. If you try uploading a test with a name that already exists, you will get an error message letting you know. However, if you upload a test with the same name as a test you have already uploaded, the old test will be completely overwritten and the new version will take its place.
+To add tests, add them to the list in this JSON file. The `name` is required, and it is the identifier of each test. Since test cases are shared between all students, the name MUST BE UNIQUE between all students. If you try uploading a test with a name that already exists, you will get an error message letting you know. However, if you upload a test with the same name as a test you have already uploaded, the old test will be completely overwritten and the new version will take its place. Note that for JUnit testing, it is fine if the `name` is not unique between all students, as it should be the name of your test class; however, the names of your test methods within that class must be unique.
 
 The `description` field is optional, and it just adds a helpful description of what this test case does. When other students run this test case, they will see this description.
 
@@ -74,7 +80,7 @@ To make a curl test (type `curl`), just write the exact `curl` command you would
 
 ### JUnit 4 Tests:
 
-To make a JUnit 4 test (type `junit`), ... To be explained ...
+To make a JUnit 4 test (type `junit`), the `name` field needs to be exactly the same as the name of your test class. The only other field you need to specify is `location`, which should be the path to your test file. Note that you should not include the name of the root directory or anything above the root directory (i.e. if the path to the test file is `hw0-repo-example-student/src/test/java/nets2120/AppTest.java`, you should put `src/test/java/nets2120/AppTest.java` as the `location` field).
 
 ### How the Tests Work
 

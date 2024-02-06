@@ -4,7 +4,7 @@ This is an example autograder, to upload it to gradescope, zip these files toget
 
 To setup the autograder, follow the following steps:
 
-1. You may start either with an existing autograder, or just copy everything from this directory (`example-autograder`). If you already have an existing grader, you don't need to copy the `run_autograder` and `setup.sh`. Instead, add on the single line of each of these to the end of your corresponding files. Note that you don't need to copy `example-java-server`, as this is just a demonstration folder giving an example. If you want to copy this structure, as explained later, just rename it to `sample-submission` and delete/overwrite the other `sample-submission` folder.
+1. You may start either with an existing autograder, or just copy everything from this directory (`example-autograder`). If you already have an existing grader, you don't need to copy the `run_autograder` and `setup.sh`. Instead, add on the single line of each of these to the end of your corresponding files. If you want to copy this structure, as explained later, just rename it to `sample-submission` and delete/overwrite the other `sample-submission` folder.
 
 2. In the `test-grader` folder, modify the `config.json` to match what you want. You can find a description of the variables below. It is important that you include the `assignmenTitle` field (and preferably it should match the Gradescope assignment title, but this isn't required and it should still work) (e.g. for Homework 1 Milestone 1 it might be `hw1_ms1`).
 
@@ -18,7 +18,7 @@ To setup the autograder, follow the following steps:
 
     These correspond to the server IP and port that the backend server and database is running on (probably an EC2 instance or something similar). The `AUTH_TOKEN` is the token that this server requires to authenticate Gradescope. Set it to be the value of the token required by the server (which is set in the `.env` file in the `testit-server` server directory when it's started). Make sure this `.env` file is included when zipping the autograder, but it should be by default.
 
-4. In the `sample-submission` directory, add in all files required to run your sample solution to the assignment. You may delete/replace the already existing `index.js` and `package.json` that show an example. Note that you can find an example of what a Java server project would look like in the `example-java-server` folder, but if you actually wanted to use something like this, you would need to rename the folder to `sample-submission`.
+4. In the `sample-submission` directory, add in all files required to run your sample solution to the assignment. You may delete/replace the already existing `index.js`, `package.json` (for a Node.js server), `pom.xml` and `src` folder (for a Java project) that show an example.
 
 5. Modify `pre-test.sh` to contain the command(s) needed to setup the environment of your sample solution (before running the tests). Note that this script IS expected to terminate, so if you need to run a server or something similar to that, it must be done in the background:
 
@@ -60,8 +60,6 @@ Here are a list of the config variables and what they affect. Note that all of t
 - `weightReturnedTests`: A boolean that specifies if the random sampling for `maxNumReturnedTests` is weighted or not. If it is weighted, then the random sample of returned tests will be weighted on the number of likes each test case has (but it will still include those with no likes).
 
 - `pomPath`: When using Maven and a Java server, this is the path to the `pom.xml` file. (In future versions, this is subject to removal in favor of the `pom.xml` file always being at the root). If you are using a different server, then this variable can be set to anything.
-
-- `jUnitTestLocation`: When using Maven and JUnit 4 tests, this is the path to the directory that contains all of the tests. (In future versions, this is subject to removal in favor of a field in each JUnit 4 test case written in the test file). If you are using a different server, then this variable can be set to anything.
 
 - `groupedDefaultTestsScore`: See the explanation in #8 above
 
