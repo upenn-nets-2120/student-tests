@@ -7,6 +7,7 @@ import re
 import base64
 import shutil
 import xml.etree.ElementTree as ET
+from copy import deepcopy
 
 
 SERVER_IP = os.getenv('SERVER_IP') # EC2 instance IP of database/server
@@ -92,36 +93,30 @@ def run_curl_test(test):
   return {"success": True, "reason": f"Test '{test['name']}' Passed"}
 
 def run_junit_tests(test, setup, from_server):
+  source, submission = "/autograder/source/sample-submission", "/autograder/submission"
   if setup: # running default tests on sample server
-    base = "/autograder/source"
-    pom_file_path = os.path.join(base, config["pomPath"])
-    report_path = os.path.join(base, "sample-submission", "target/surefire-reports", f"TEST-nets2120.{test['name']}.xml")
+    pom_file_path = os.path.join(source, config["pomPath"])
+    report_path = os.path.join(source, "target/surefire-reports", f"TEST-nets2120.{test['name']}.xml")
     subprocess.run(["mvn", "test", "-f", pom_file_path])
-  elif not from_server: # running student tests on sample server (test path in student submission should correspond to test path in sample submission)
-    student_test_path = os.path.join("/autograder/submission", test["location"])
-    sample_test_path = os.path.dirname(os.path.join("/autograder/source/", test["location"]))
-    report_path = os.path.join("/autograder/submission", "sample-submission", "target/surefire-reports", f"TEST-nets2120.{test['name']}.xml")
-    if not os.path.exists(student_test_path) or not os.path.exists(sample_test_path):
+  elif not from_server: # running student tests on sample server
+    pom_file_path = os.path.join(source, config["pomPath"])
+    student_test_path = os.path.join(submission, test["location"])
+    sample_test_path = os.path.join(source, test["location"]) 
+    report_path = os.path.join(source, "target/surefire-reports", f"TEST-nets2120.{test['name']}.xml")
+    if not os.path.exists(student_test_path) or not os.path.exists(os.path.dirname(sample_test_path)):
       return [{"name": test['name'], "success": False, "reason": f"Location '{test['location']}' does not match any test file."}]
     # copy file over to sample server, run tests
-    shutil.copyfile(student_test_path, sample_test_path)
+    shutil.copy(student_test_path, sample_test_path)
     subprocess.run(["mvn", "test", "-f", pom_file_path])
   else: # running shared tests on student server
-    base = "/autograder/submission"
-    pom_file_path = os.path.join(base, config["pomPath"])
-    decoded_content = base64.b64decode(test['content']).decode('utf-8')
-    test_file_path = os.path.join(base, test['location'])
-
-    with open(test_file_path, 'w') as file:
-        file.write(decoded_content)
-
-    # jank
-    i = test["name"].rfind(".")
-    if i == -1:
-      return [{"name": test['name'], "success": False, "reason": "Unable to parse test name"}]
-    class_name, method = test['name'][:i], test['name'][i+1:]
-    test_class_with_method = f"{class_name}#{method}"
-    report_path = os.path.join(base, "target/surefire-reports", f"TEST-{test_class_with_method}.xml")
+    pom_file_path = os.path.join(submission, config["pomPath"])
+    decoded_content = base64.b64decode(test['encoding'].encode('utf-8'))
+    test_file_path = os.path.join(submission, test['location'])
+    os.makedirs(os.path.dirname(test_file_path), exist_ok=True)
+    with open(test_file_path, 'wb') as file:
+      file.write(decoded_content)
+    test_class_with_method = f"{test['className']}#{test['testMethodName']}"
+    report_path = os.path.join(submission, "target/surefire-reports", f"TEST-{test['className']}.xml")
     subprocess.run(["mvn", "test", f"-Dtest={test_class_with_method}", "-f", pom_file_path])
   if not os.path.exists(report_path):
     return [{"name": test['name'], "success": False, "reason": "Test report not found"}]
@@ -138,9 +133,9 @@ def run_junit_tests(test, setup, from_server):
     failure = testcase.find('failure')
     if error is not None or failure is not None:
       reason = error.text if error is not None else failure.text
-      test_results.append({"name": full_test_name, "success": False, "reason": f"Test '{full_test_name}' Failed: {reason}"})
+      test_results.append({"name": full_test_name, "success": False, "reason": f"Test '{full_test_name}' Failed: {reason}" })
     else:
-      test_results.append({"name": full_test_name, "success": True, "reason": f"Test '{full_test_name}' Passed"})
+      test_results.append({"name": full_test_name, "success": True, "reason": f"Test '{full_test_name}' Passed", "className": classname, "testMethodName": test_name })
   return test_results
 
 def run_test(test, setup, from_server):
@@ -157,7 +152,6 @@ def run_test(test, setup, from_server):
 
 def run_tests(tests, setup=False, from_server=False):
   results = {"passed": 0, "failed": 0, "results": []}
-
   for test in tests:
     test_result = run_test(test, setup, from_server)
     if test["type"] == "curl":
@@ -172,20 +166,24 @@ def run_tests(tests, setup=False, from_server=False):
         results["failed"] += 1
     elif test["type"] == "junit":
       if setup or not from_server:
-        test_path = os.path.join(f"/autograder/{'source' if setup else 'submission'}", test["location"])
+        test_path = os.path.join(f"/autograder/{'source/sample-submission' if setup else 'submission'}", test["location"])
         with open(test_path, "rb") as f:
-          encoded_contents = base64.b64encode(f.read())
+          encoded_contents = base64.b64encode(f.read()).decode("utf-8")
         test["encoding"] = encoded_contents
-      for t in test_result:
-        results["results"].append({
-          "name": t["name"],
-          "result": t,
-          "test": test
-        })
-        if t["success"]:
+      for junit_test_result in test_result:
+        t = deepcopy(test)
+        if junit_test_result["success"]:
           results["passed"] += 1
+          t["className"] = junit_test_result["className"]
+          t["testMethodName"] = junit_test_result["testMethodName"]
+          t["name"] = junit_test_result["name"]
         else:
           results["failed"] += 1 
+        results["results"].append({
+          "name": junit_test_result["name"],
+          "result": junit_test_result,
+          "test": t
+        })
 
   results["total"] = len(results["results"])
   return results
@@ -363,7 +361,7 @@ def main():
   # Upload tests to the database, get response of all tests
   response = upload_tests(assignment_title, student_id, successful_tests, config)
   if response.status_code < 200 or response.status_code >= 300:
-    write_output({"output": "Error uploading tests to the database. Please contact the assignment administrators. Response status " + response.status_code + ":\n" + response.text + "\nIn the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str, "tests": feedback})
+    write_output({"output": f"Error uploading tests to the database. Please contact the assignment administrators. Response status {response.status_code}:\n{response.text}\nIn the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n{output_str}", "tests": feedback})
     return
   json_response = response.json()
   if not json_response['success']:
@@ -477,7 +475,7 @@ def setup():
   # Upload tests to the database, get response of all tests
   response = upload_tests(assignment_title, "-1", successful_tests, config)
   if response.status_code < 200 or response.status_code >= 300:
-    print("Error uploading tests to the database. Please contact the database administrators. Response status " + response.status_code + ":\n" + response.text + "\nIn the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str + "\n" + test_response)
+    print(f"Error uploading tests to the database. Please contact the assignment administrators. Response status {response.status_code}:\n{response.text}\nIn the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n{output_str}\n{test_response}")
     return
   json_response = response.json()
   if not json_response['success']:
