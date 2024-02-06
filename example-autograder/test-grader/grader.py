@@ -144,9 +144,7 @@ def run_junit_tests(test, setup, from_server):
         report_path = os.path.join(
             source, "target/surefire-reports", f"TEST-nets2120.{test['name']}.xml"
         )
-        if not os.path.exists(student_test_path) or not os.path.exists(
-            os.path.dirname(sample_test_path)
-        ):
+        if not os.path.exists(student_test_path):
             return [
                 {
                     "name": test["name"],
@@ -155,6 +153,7 @@ def run_junit_tests(test, setup, from_server):
                 }
             ]
         # copy file over to sample server, run tests
+        os.makedirs(os.path.dirname(sample_test_path), exist_ok=True)
         shutil.copy(student_test_path, sample_test_path)
         subprocess.run(["mvn", "test", "-f", pom_file_path])
     else:  # running shared tests on student server
