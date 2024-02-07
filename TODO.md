@@ -1,8 +1,8 @@
 Here is an ordered list of todos and other things to work on for this framework:
 
-1. Merge in JUnit 4 tests support and bug fixes https://github.com/upenn-nets-2120/student-tests/tree/junit-testing
+1. Merge in JUnit 4 tests support and bug fixes https://github.com/upenn-nets-2120/student-tests/pull/3
 2. Merge in few Frontend https://github.com/upenn-nets-2120/student-tests/pull/2
-3. Fix security vulnerabilities (ask @JHawk0224)
+3. Fix security vulnerabilities (ask @JHawk0224 )
 4. Make sure default tests are always run (from Gradescope files), e.g. even if student tests don’t pass (so default tests need to be uploaded to Gradescope every time the TA submits the autograder). Also make sure these default tests are run first to prevent server crashes affecting them.
 5. Give useful feedback to students if tests.json is formatted incorrectly, e.g. if the test type field isn’t there, if it isn’t valid json, etc. Also ensure that the required fields are there like name, etc.
 6. Set up/allow only https (port 443), also Elastic IP and A record for domain name
