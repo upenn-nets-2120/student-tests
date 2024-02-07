@@ -95,10 +95,35 @@ app.post('/create-accounts', authorize, express.json(), async (req, res) => {
   }));
 
   try {
-    await users.insertMany(preparedAccounts, { ordered: false });
-    res.status(201).send('Accounts created');
+    const result = await users.insertMany(preparedAccounts, { ordered: false });
+    res.status(201).send(`${result.insertedCount} accounts created`);
   } catch (err) {
     res.status(500).send('Some accounts could not be created due to errors');
+  }
+});
+
+app.delete('/delete-accounts', authorize, express.json(), async (req, res) => {
+  const users = db.collection('users');
+  const accountData = req.body;
+
+  if (!Array.isArray(accountData)) {
+    return res.status(400).send('Input should be an array of objects containing account information');
+  }
+
+  const accountUsernames = accountData.map(account => account.username);
+
+  try {
+    const deletionResult = await users.deleteMany({
+      username: { $in: accountUsernames }
+    });
+
+    if (deletionResult.deletedCount === 0) {
+      return res.status(404).send('No accounts found with the provided usernames');
+    } else {
+      return res.status(200).send(`${deletionResult.deletedCount} accounts deleted`);
+    }
+  } catch (err) {
+    return res.status(500).send('Failed to delete accounts');
   }
 });
 
