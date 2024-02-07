@@ -341,17 +341,19 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
     }
     let tests = await collection.find(testsQuery).toArray();
 
-    if (tests.length > maxNumReturnedTests) {
+    let defaultTests = tests.filter(test => test.isDefault);
+    let studentTests = tests.filter(test => !test.isDefault);
+    if (studentTests.length > maxNumReturnedTests) {
       if (weightReturnedTests) { // use weighted sampling by number of likes
-        tests = tests.map(test => ({ ...test, weight: test.studentsLiked.length + 1 }));
-        tests = weightedRandomSample(tests, maxNumReturnedTests); // TODO: make this more efficient?
-        tests = tests.map(({ weight, ...testWithoutWeight }) => testWithoutWeight);
+        studentTests = studentTests.map(test => ({ ...test, weight: test.studentsLiked.length + 1 }));
+        studentTests = weightedRandomSample(studentTests, maxNumReturnedTests); // TODO: make this more efficient?
+        studentTests = studentTests.map(({ weight, ...testWithoutWeight }) => testWithoutWeight);
       } else { // use simple random sampling
-        tests = tests.sort(() => 0.5 - Math.random()).slice(0, maxNumReturnedTests);
+        studentTests = studentTests.sort(() => 0.5 - Math.random()).slice(0, maxNumReturnedTests);
       }
     }
 
-    result.tests = tests;
+    result.tests = defaultTests.concat(studentTests);
     res.status(201).send(result);
   } catch (err) {
     result.success = false;
