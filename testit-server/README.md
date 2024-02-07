@@ -13,7 +13,7 @@ SIGNING_TOKEN=...
 
 The first two are the IP and port that this server will be running on (e.g. the IP of the EC2 instance). They should match what's put in the corresponding fields in the `.env` of any `example-autograder`.
 
-The `AUTH_TOKEN` will store the token that any client will need to access the server with authority (which is, for now, is just the Gradescope autograder (and manual curl requests) - we don't want students accessing this server). Therefore, the `.env` file in any `example-autograder` will need to include the same value for this variable.
+The `AUTH_TOKEN` will store the token that any client will need to access the server with authority (which is, for now, just the Gradescope autograder (and manual curl requests) - we don't want students accessing this server). Therefore, the `.env` file in any `example-autograder` will need to include the same value for this variable.
 
 The `SIGING_TOKEN` will store the token used to sign account logins for the frontend. It can be anything, so you can just generate a random string for this.
 

@@ -453,7 +453,7 @@ def setup():
   # Upload tests to the database, get response of all tests
   response = upload_tests(assignment_title, "-1", successful_tests, config)
   if response.status_code < 200 or response.status_code >= 300:
-    print(f"Error uploading tests to the database. Please contact the assignment administrators. Response status {response.status_code}:\n{response.text}\nIn the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str + "\n" + test_response)
+    print(f"Error uploading tests to the database. Please contact the database administrators. Response status {response.status_code}:\n{response.text}\nIn the meantime, here are the outcomes of running your tests on THE SAMPLE SOLUTION.\n" + output_str + "\n" + test_response)
     return
   json_response = response.json()
   if not json_response['success']:
