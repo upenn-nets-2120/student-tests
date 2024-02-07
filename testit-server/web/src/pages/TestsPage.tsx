@@ -31,7 +31,7 @@ const TestsPage: React.FC = () => {
 					<h1 className={cn(["text-2xl", "font-bold"])}>Tests</h1>
 				</CardHeader>
 				<CardContent>
-					<TestTable tests={tests} />
+					<TestTable assignmentId={assignmentId} tests={tests} />
 				</CardContent>
 			</Card>
 		</main>
