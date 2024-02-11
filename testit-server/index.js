@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
+const _ = require('lodash');
 const mongodb = require('mongodb');
 const MongoClient = mongodb.MongoClient;
 const app = express();
@@ -311,8 +312,10 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
   const result = {failedToAdd: []};
   const processedTestCases = [];
   for (const testCase of testCases) {
-    testCase.author = author;
+    const existingTestCase = await collection.findOne({ name: testCase.name });
+    const isTestIdentical = existingTestCase && isTestSame(testCase, existingTestCase);
 
+    testCase.author = author;
     testCase.timesRan = 0;
     testCase.timesRanSuccessfully = 0;
     testCase.numStudentsRan = 0;
@@ -325,17 +328,17 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
     testCase.public ??= true;
     testCase.visibility = "limited"; // 3 options, full (actual content of test can be seen), limited (only name, description, and feedback), none (only author can see)
     testCase.isDefault = false; // default would be true for instructor-created test cases that show up even if a student hasn't submitted any tests
-
     if (testCase.author === "admin") {
       testCase.isDefault = true;
     }
 
-    const existingTestCase = await collection.findOne({ name: testCase.name });
     if (existingTestCase) {
       if (existingTestCase.author === author) {
         // Author is the same, update the existing test case
-        await collection.updateOne({ name: testCase.name }, { $set: testCase });
-        console.log("Test " + testCase.name + " updated!");
+        if (!isTestIdentical) {
+          await collection.updateOne({ name: testCase.name }, { $set: testCase });
+          console.log("Test " + testCase.name + " updated!");
+        }
       } else {
         // Different author, cannot overwrite
         console.log("Test " + testCase.name + " already exists by a different author!");
@@ -387,6 +390,23 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
     res.status(500).send(result);
   }
 });
+
+function isTestSame(newTest, oldTest) {
+  const newTestKeys = Object.keys(newTest);
+  const oldTestKeys = Object.keys(oldTest);
+
+  if (!newTestKeys.every(key => oldTestKeys.includes(key))) {
+    return false;
+  }
+
+  for (const key of newTestKeys) {
+    if (!_.isEqual(newTest[key], oldTest[key])) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 function weightedRandomSample(items, maxItems) {
   let totalWeight = items.reduce((acc, item) => acc + item.weight, 0);
