@@ -49,7 +49,7 @@ To setup the autograder, follow the following steps:
 
 Here are a list of the config variables and what they affect. Note that all of these must be present in the config file, but if some aren't needed (explained below), then you may set them to empty or whatever. See the `config.json` file for an example as to what these might look like.
 
-- `assignmentTitle`: This is just the title of the assignment. It is what will appear on the Website to browse tests. Ideally it should match the Gradescope assignment title, but this isn't required and it should still work.
+- `assignmentTitle`: This is just the title of the assignment. It is what will appear on the Website to browse tests. Ideally it should match the Gradescope assignment title, but this isn't required and it should still work. Note that it is possible to make hidden assignments for testing. If the title ends in `hidden`, then the assignment will only be visible to accounts with `admin` set to true. Otherwise they are not visible (for students).
 
 - `numPublicTestsForAccess`: This is the number of valid test cases a student must submit before having access to other students' test cases. Note that they can still run the default tests no matter what. A valid test case just means that it is public, and that it was submitted at least 3 days before the due date (THIS `3` WILL BE MADE A CONFIG VAR EVENTUALLY).
 

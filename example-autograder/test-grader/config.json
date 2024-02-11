@@ -6,8 +6,8 @@
   "weightReturnedTests": false,
   "pomPath": "sample-java-project/pom.xml",
   "jUnitTestLocation": "sample-java-project/src/test/java/nets2120",
-  "groupedDefaultTestsScore": 0,
-  "submitTestsScore": 0,
+  "groupedDefaultTestsScore": 5,
+  "submitTestsScore": 5,
   "timeToDeadline": 72,
   "waitTimeAfterPreTest": 8
 }

@@ -6,6 +6,8 @@ import time, os, sys, signal
 import re
 import base64
 import xml.etree.ElementTree as ET
+from datetime import datetime
+import pytz
 
 
 SERVER_IP = os.getenv('SERVER_IP') # EC2 instance IP of database/server
@@ -230,26 +232,47 @@ def post_test(pre_pgid, submission_path):
 
 
 def write_output(data):
+  due_date_str = metadata["assignment"]["due_date"]
+  due_date_format = "%Y-%m-%dT%H:%M:%S.%f%z"  # e.g. 2024-01-21T23:00:00.000000-07:00
+  due_date = datetime.strptime(due_date_str, due_date_format)
+  created_at_format = "%Y-%m-%dT%H:%M:%S.%fZ" # e.g. 2024-02-01T17:04:11.668Z
+
+  eastern = pytz.timezone("US/Eastern")
+  print("Assignment due date: " + due_date.astimezone(eastern).strftime("%Y-%m-%d %H:%M:%S %Z%z"))
+
   passed_defaults = True
-  for test in data["tests"]:
-    if test["isDefault"] and test["status"] == "failed":
+  valid_public_tests = 0
+  for test_feedback in data["tests"]:
+    test = test_feedback["test-data"]
+    if test["isDefault"] and test_feedback["status"] == "failed":
       passed_defaults = False
-      break
-  # to be implemented, use timeToDeadline to check if in time
+    if not test["isDefault"] and test["public"] and test["selfWritten"]:
+      created_at_str = test["createdAt"]
+      created_at = datetime.strptime(created_at_str, created_at_format)
+      created_at = pytz.timezone('UTC').localize(created_at)
+
+      time_difference = due_date - created_at
+      hours_before_due = time_difference.total_seconds() / 3600
+      print(f"Test {test_feedback['name']} was created at {created_at.astimezone(eastern).strftime('%Y-%m-%d %H:%M:%S %Z%z')}, {hours_before_due} hours before due")
+
+      if hours_before_due >= config["timeToDeadline"]:
+        valid_public_tests += 1
+
   public_tests_passed = {
     "name": f"Submitted at least {config['numPublicTestsForAccess']} public test(s) {config['timeToDeadline']} hours before deadline",
-    "status": "passed",
-    "score": config["submitTestsScore"] if True else 0,
+    "status": "passed" if valid_public_tests >= config["numPublicTestsForAccess"] else "failed",
+    "score": config["submitTestsScore"] if valid_public_tests >= config["numPublicTestsForAccess"] else 0,
     "max_score": config["submitTestsScore"],
-    "visibility": "visible"
+    "visibility": "visible",
   }
   public_defaults_passed = {
     "name": "Passed all of the default tests",
-    "status": "passed",
+    "status": "passed" if passed_defaults else "failed",
     "score": config["groupedDefaultTestsScore"] if passed_defaults else 0,
     "max_score": config["groupedDefaultTestsScore"],
-    "visibility": "visible"
+    "visibility": "visible",
   }
+
   if config["submitTestsScore"] > 0:
     data["tests"].append(public_tests_passed)
   if config["groupedDefaultTestsScore"] > 0:
@@ -308,9 +331,14 @@ def main():
       "status": "failed" if not result["result"]["success"] else "passed",
       "score": 0 if not result["result"]["success"] else 0,
       "max_score": 0,
-      "isDefault": False,
       "output": "Description: " + result["test"]["description"] + "\n\n" + result["result"]["reason"] if "description" in result["test"] and result["test"]["description"] else result["result"]["reason"],
-      "visibility": "visible"
+      "visibility": "visible",
+      "test-data": {
+        "isDefault": False,
+        "createdAt": "",
+        "public": False,
+        "selfWritten": False
+      }
     } for result in sample_results["results"]]
     successful_tests = []
     successful_test_names = []
@@ -370,9 +398,14 @@ def main():
     "status": "failed" if not result["result"]["success"] else "passed",
     "score": result["test"]["score"] if result["test"].get("isDefault", False) and "score" in result["test"] and result["result"]["success"] else 0,
     "max_score": result["test"]["score"] if result["test"].get("isDefault", False) and "score" in result["test"] else 0,
-    "isDefault": result["test"].get("isDefault", False),
     "output": "Description: " + result["test"]["description"] + "\n\n" + result["result"]["reason"] if "description" in result["test"] and result["test"]["description"] else result["result"]["reason"],
-    "visibility": "visible"
+    "visibility": "visible",
+    "test-data": {
+      "isDefault": result["test"].get("isDefault", False),
+      "createdAt": result["test"].get("createdAt", ""),
+      "public": result["test"].get("public", False),
+      "selfWritten": result["test"].get("selfWritten", False)
+    }
   } for result in all_results["results"]]
 
   if all_results["total"] != all_results["passed"]:

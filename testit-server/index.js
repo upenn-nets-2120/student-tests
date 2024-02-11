@@ -379,6 +379,7 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
     }
 
     result.tests = defaultTests.concat(studentTests);
+    result.tests = result.tests.map(test => ({ ...test, selfWritten: test.author === author }));
     res.status(201).send(result);
   } catch (err) {
     result.success = false;
