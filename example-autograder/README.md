@@ -51,7 +51,7 @@ Here are a list of the config variables and what they affect. Note that all of t
 
 - `assignmentTitle`: This is just the title of the assignment. It is what will appear on the Website to browse tests. Ideally it should match the Gradescope assignment title, but this isn't required and it should still work. Note that it is possible to make hidden assignments for testing. If the title ends in `hidden`, then the assignment will only be visible to accounts with `admin` set to true. Otherwise they are not visible (for students).
 
-- `numPublicTestsForAccess`: This is the number of valid test cases a student must submit before having access to other students' test cases. Note that they can still run the default tests no matter what. A valid test case just means that it is public, and that it was submitted at least 3 days before the due date (THIS `3` WILL BE MADE A CONFIG VAR EVENTUALLY).
+- `numPublicTestsForAccess`: This is the number of valid test cases a student must submit before having access to other students' test cases. Note that they can still run the default tests no matter what. A valid test case just means that it is public, and that it was submitted at least `timeToDeadline` hours before the (Gradescope) due date.
 
 - `maxTestsPerStudent`: This is the maximum number of tests a student may submit. If they go over this limit, any new tests will not be submitted, and they must delete them from the Website after logging in.
 
