@@ -397,7 +397,7 @@ def main():
     "name": result["name"],
     "status": "failed" if not result["result"]["success"] else "passed",
     "score": result["test"]["score"] if result["test"].get("isDefault", False) and "score" in result["test"] and result["result"]["success"] else 0,
-    "max_score": result["test"]["score"] if result["test"].get("isDefault", False) and "score" in result["test"] else 0,
+    "max_score": result["test"]["max_score"] if result["test"].get("isDefault", False) and "max_score" in result["test"] else (result["test"]["score"] if result["test"].get("isDefault", False) and "score" in result["test"] else 0),
     "output": "Description: " + result["test"]["description"] + "\n\n" + result["result"]["reason"] if "description" in result["test"] and result["test"]["description"] else result["result"]["reason"],
     "visibility": "visible",
     "test-data": {

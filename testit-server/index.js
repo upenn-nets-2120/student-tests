@@ -191,7 +191,7 @@ app.get('/get-tests/:assignmentName', authenticateToken, (req, res) => {
     }));
 
     if (!userIsAdmin) {
-      items = items.map(({ test, studentsRan, studentsRanSuccessfully, studentsLiked, studentsDisliked, public, visibility, isDefault, score, ...rest }) => rest);
+      items = items.map(({ test, studentsRan, studentsRanSuccessfully, studentsLiked, studentsDisliked, public, visibility, isDefault, score, max_score, ...rest }) => rest);
     }
 
     res.status(200).json(items);
