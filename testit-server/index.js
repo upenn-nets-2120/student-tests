@@ -370,7 +370,8 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
     let tests = await collection.find(testsQuery).toArray();
 
     let defaultTests = tests.filter(test => test.isDefault);
-    let studentTests = tests.filter(test => !test.isDefault);
+    let authorsTests = tests.filter(test => !test.isDefault && test.author === author);
+    let studentTests = tests.filter(test => !test.isDefault && test.author !== author);
     if (studentTests.length > maxNumReturnedTests) {
       if (weightReturnedTests) { // use weighted sampling by number of likes
         studentTests = studentTests.map(test => ({ ...test, weight: test.studentsLiked.length + 1 }));
@@ -381,7 +382,7 @@ app.post('/submit-tests/:assignmentName', authorize, express.json(), async (req,
       }
     }
 
-    result.tests = defaultTests.concat(studentTests);
+    result.tests = defaultTests.concat(authorsTests).concat(studentTests);
     result.tests = result.tests.map(test => ({ ...test, selfWritten: test.author === author }));
     res.status(201).send(result);
   } catch (err) {
